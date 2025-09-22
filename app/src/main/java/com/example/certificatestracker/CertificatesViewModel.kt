@@ -4,17 +4,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class CertificatesViewModel(private val dao: CertificatesDao) : ViewModel() {
 
-    val certificates: StateFlow<List<CertificateEntity>> =
-        dao.getAllFlow().stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+    val certificates: StateFlow<List<Certificate>> =
+        dao.getAllFlow()
+            .map { it }
+            .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     fun addCertificate(
         isin: String,
@@ -25,21 +24,23 @@ class CertificatesViewModel(private val dao: CertificatesDao) : ViewModel() {
         autocallLevel: Double
     ) {
         viewModelScope.launch {
-            val cert = CertificateEntity(
-                isin = isin,
-                underlyingName = underlyingName,
-                strike = strike,
-                barrier = barrier,
-                bonusLevel = bonusLevel,
-                autocallLevel = autocallLevel
+            dao.insert(
+                Certificate(
+                    isin = isin,
+                    underlyingName = underlyingName,
+                    strike = strike,
+                    barrier = barrier,
+                    bonusLevel = bonusLevel,
+                    autocallLevel = autocallLevel
+                )
             )
-            dao.insert(cert)
         }
     }
 
-    fun deleteCertificate(cert: CertificateEntity) {
+    fun deleteCertificate(isin: String) {
         viewModelScope.launch {
-            dao.delete(cert)
+            dao.delete(isin)
         }
     }
 }
+

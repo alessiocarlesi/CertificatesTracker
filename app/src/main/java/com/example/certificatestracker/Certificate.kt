@@ -4,12 +4,12 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 @Entity(tableName = "certificates")
-data class CertificateEntity(
+data class Certificate(
     @PrimaryKey val isin: String,
-    val underlyingName: String = "", // nuovo campo
+    val underlyingName: String = "",
     val strike: Double = 0.0,
     val barrier: Double = 0.0,
     val bonusLevel: Double = 0.0,
-    val autocallLevel: Double = 0.0 // nuovo campo
+    val autocallLevel: Double = 0.0,
+    val lastPrice: Double = 0.0 // prezzo sottostante da Yahoo
 )
-

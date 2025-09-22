@@ -5,11 +5,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(
-    entities = [CertificateEntity::class],  // 👈 deve esserci CertificateEntity
-    version = 2,
-    exportSchema = false
-)
+@Database(entities = [Certificate::class], version = 1, exportSchema = false)
 abstract class CertificatesDatabase : RoomDatabase() {
     abstract fun certificatesDao(): CertificatesDao
 
@@ -22,7 +18,7 @@ abstract class CertificatesDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     CertificatesDatabase::class.java,
-                    "certificates_database"
+                    "certificates_db"
                 )
                     .fallbackToDestructiveMigration()
                     .build()

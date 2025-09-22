@@ -9,13 +9,18 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         setContent {
             MaterialTheme {
-                val db = CertificatesDatabase.getDatabase(application)
-                val dao = db.certificatesDao()
-                val factory = CertificatesViewModelFactory(dao)
-                val certificatesViewModel: CertificatesViewModel = viewModel(factory = factory)
+                // Ottieni DAO dal database
+                val dao = CertificatesDatabase.getDatabase(application).certificatesDao()
 
+                // Crea il ViewModel con la factory
+                val certificatesViewModel: CertificatesViewModel = viewModel(
+                    factory = CertificatesViewModelFactory(dao)
+                )
+
+                // Composable principale
                 CertificatesScreen(viewModel = certificatesViewModel)
             }
         }
