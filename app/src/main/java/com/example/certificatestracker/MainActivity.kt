@@ -4,9 +4,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.runtime.LaunchedEffect
-
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -22,22 +23,22 @@ class MainActivity : ComponentActivity() {
                     factory = CertificatesViewModelFactory(dao)
                 )
 
-                // 🔹 LaunchedEffect per chiamare fetchAndUpdatePrice all'avvio
-                LaunchedEffect(Unit) {
-                    certificatesViewModel.fetchAndUpdatePrice("ISP.MI", "e1e60f41a11968b889595584e0a6c310")
+                // Coroutine scope per aggiornamenti
+                val scope = rememberCoroutineScope()
+
+                // 🔹 Aggiornamento prezzi automatico all’avvio
+                LaunchedEffect(certificatesViewModel) {
+                    certificatesViewModel.certificates.collect { certList ->
+                        certList.forEach { cert ->
+                            scope.launch {
+                                certificatesViewModel.fetchAndUpdatePrice(cert.isin, "e1e60f41a11968b889595584e0a6c310")
+                            }
+                        }
+                    }
                 }
-
-
 
                 // Composable principale
                 CertificatesScreen(viewModel = certificatesViewModel)
-
-                // 🔹 ESEMPIO TEMPORANEO SOLO PER DEBUG
-                // Chiamata al fetcher per verificare il prezzo di chiusura
-                certificatesViewModel.fetchLatestCloseForCertificate(
-                    symbol = "ISP.MI",
-                    apiKey = "e1e60f41a11968b889595584e0a6c310"
-                )
             }
         }
     }

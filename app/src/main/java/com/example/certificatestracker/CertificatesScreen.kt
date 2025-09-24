@@ -4,7 +4,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun CertificatesScreen(viewModel: CertificatesViewModel) {
@@ -18,15 +21,25 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
     var newBonus by remember { mutableStateOf("") }
     var newAutocall by remember { mutableStateOf("") }
 
+    // Stato per evidenziare aggiornamenti recenti
+    val recentlyUpdated = remember { mutableStateMapOf<String, Boolean>() }
+
+    // Coroutine scope per onClick
+    val scope = rememberCoroutineScope()
+
     Column(modifier = Modifier.padding(16.dp)) {
 
         // Navigazione tra certificati
         if (certificates.isNotEmpty()) {
             val cert = certificates.getOrNull(currentIndex)
             cert?.let {
+
+                val textColor = if (recentlyUpdated[it.isin] == true) Color(0xFF008000) else Color.Black
+
                 Text(
                     text = "ISIN: ${it.isin}\nSottostante: ${it.underlyingName} - Prezzo: ${it.lastPrice} EUR\nStrike: ${it.strike}\nBarrier: ${it.barrier}\nBonus: ${it.bonusLevel}\nAutocall: ${it.autocallLevel}",
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = textColor
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -47,7 +60,6 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Pulsante per cancellare il certificato corrente
                 Button(
                     onClick = { viewModel.deleteCertificate(it.isin) },
                     modifier = Modifier.fillMaxWidth()
@@ -123,7 +135,6 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                         autocallLevel = autocallVal
                     )
 
-                    // Reset campi
                     newIsin = ""
                     newUnderlying = ""
                     newStrike = ""
@@ -142,8 +153,13 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
         // Pulsante per aggiornare tutti i prezzi
         Button(
             onClick = {
-                certificates.forEach {
-                    viewModel.fetchAndUpdatePrice(it.isin, "e1e60f41a11968b889595584e0a6c310")
+                certificates.forEach { cert ->
+                    scope.launch {
+                        viewModel.fetchAndUpdatePrice(cert.isin, "e1e60f41a11968b889595584e0a6c310")
+                        recentlyUpdated[cert.isin] = true
+                        delay(2000)
+                        recentlyUpdated[cert.isin] = false
+                    }
                 }
             },
             modifier = Modifier.fillMaxWidth()
