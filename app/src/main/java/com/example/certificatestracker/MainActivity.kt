@@ -5,6 +5,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.runtime.LaunchedEffect
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -19,6 +21,13 @@ class MainActivity : ComponentActivity() {
                 val certificatesViewModel: CertificatesViewModel = viewModel(
                     factory = CertificatesViewModelFactory(dao)
                 )
+
+                // 🔹 LaunchedEffect per chiamare fetchAndUpdatePrice all'avvio
+                LaunchedEffect(Unit) {
+                    certificatesViewModel.fetchAndUpdatePrice("ISP.MI", "e1e60f41a11968b889595584e0a6c310")
+                }
+
+
 
                 // Composable principale
                 CertificatesScreen(viewModel = certificatesViewModel)

@@ -58,5 +58,30 @@ class CertificatesViewModel(private val dao: CertificatesDao) : ViewModel() {
             }
         }
     }
+
+    fun updateCertificatePrice(isin: String, price: Double) {
+        viewModelScope.launch {
+            dao.updatePrice(isin, price)
+        }
+    }
+
+    fun fetchAndUpdatePrice(isin: String, apiKey: String) {
+        viewModelScope.launch {
+            // Trova il sottostante corrispondente
+            val certificate = certificates.value.find { it.isin == isin } ?: return@launch
+            val symbol = certificate.underlyingName
+
+            // Fetch prezzo
+            val result = MarketstackFetcher.fetchLatestClose(symbol, apiKey)
+
+            if (result is FetchResult.Success) {
+                updateCertificatePrice(isin, result.close)
+                println("CERTIFICATO $isin -> prezzo chiusura aggiornato: ${result.close} EUR")
+            } else if (result is FetchResult.Error) {
+                println("ERRORE fetch $symbol -> ${result.message}")
+            }
+        }
+    }
+
 }
 
