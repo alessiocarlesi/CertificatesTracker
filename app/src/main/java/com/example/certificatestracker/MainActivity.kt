@@ -22,6 +22,13 @@ class MainActivity : ComponentActivity() {
 
                 // Composable principale
                 CertificatesScreen(viewModel = certificatesViewModel)
+
+                // 🔹 ESEMPIO TEMPORANEO SOLO PER DEBUG
+                // Chiamata al fetcher per verificare il prezzo di chiusura
+                certificatesViewModel.fetchLatestCloseForCertificate(
+                    symbol = "ISP.MI",
+                    apiKey = "e1e60f41a11968b889595584e0a6c310"
+                )
             }
         }
     }

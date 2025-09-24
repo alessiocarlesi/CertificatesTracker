@@ -1,17 +1,14 @@
-package com.example.certificatestracker
-
+import kotlinx.coroutines.runBlocking
 import org.junit.Test
+import com.example.certificatestracker.MarketstackFetcher
 
-class MarketstackFetcherTest {
-
-    private val apiKey = "e1e60f41a11968b889595584e0a6c310" // metti qui la tua key
+class MarketstackFetcherSuspendTest {
+    private val apiKey = "e1e60f41a11968b889595584e0a6c310"
 
     @Test
-    fun testFetchBlocking() {
-        val result = MarketstackFetcher.fetchLatestCloseBlocking("ISP.MI", apiKey)
-        when (result) {
-            is FetchResult.Success -> println("SUCCESS -> ${result.date} : ${result.close}")
-            is FetchResult.Error -> println("ERROR -> ${result.message} (code=${result.code})")
-        }
+    fun testSuspendFetcher() = runBlocking {
+        val result = MarketstackFetcher.fetchLatestClose("ISP.MI", apiKey)
+        println(">>> SUSPEND RESULT = $result")
     }
 }
+

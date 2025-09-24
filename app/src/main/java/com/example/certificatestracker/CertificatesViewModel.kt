@@ -42,5 +42,21 @@ class CertificatesViewModel(private val dao: CertificatesDao) : ViewModel() {
             dao.delete(isin)
         }
     }
+
+    fun fetchLatestCloseForCertificate(symbol: String, apiKey: String) {
+        viewModelScope.launch {
+            // Chiamata sospesa
+            val result = MarketstackFetcher.fetchLatestClose(symbol, apiKey)
+            when (result) {
+                is FetchResult.Success -> {
+                    println("CERTIFICATO $symbol -> prezzo chiusura: ${result.close} EUR")
+                    // Qui potrai fare update in DB in futuro
+                }
+                is FetchResult.Error -> {
+                    println("ERRORE fetch $symbol -> ${result.message}")
+                }
+            }
+        }
+    }
 }
 
