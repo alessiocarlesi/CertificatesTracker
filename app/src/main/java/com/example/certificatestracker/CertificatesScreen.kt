@@ -19,12 +19,13 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
     var newAutocall by remember { mutableStateOf("") }
 
     Column(modifier = Modifier.padding(16.dp)) {
+
         // Navigazione tra certificati
         if (certificates.isNotEmpty()) {
             val cert = certificates.getOrNull(currentIndex)
             cert?.let {
                 Text(
-                    text = "ISIN: ${it.isin}\nSottostante: ${it.underlyingName}\nStrike: ${it.strike}\nBarrier: ${it.barrier}\nBonus: ${it.bonusLevel}\nAutocall: ${it.autocallLevel}",
+                    text = "ISIN: ${it.isin}\nSottostante: ${it.underlyingName} - Prezzo: ${it.lastPrice} EUR\nStrike: ${it.strike}\nBarrier: ${it.barrier}\nBonus: ${it.bonusLevel}\nAutocall: ${it.autocallLevel}",
                     style = MaterialTheme.typography.bodyMedium
                 )
 
@@ -43,6 +44,14 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                         enabled = currentIndex < certificates.size - 1
                     ) { Text(">") }
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Pulsante per cancellare il certificato corrente
+                Button(
+                    onClick = { viewModel.deleteCertificate(it.isin) },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Cancella questo certificato") }
             }
         } else {
             Text("Nessun certificato inserito")
@@ -96,6 +105,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        // Pulsante per aggiungere certificato
         Button(
             onClick = {
                 if (newIsin.isNotEmpty()) {
@@ -121,11 +131,22 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                     newBonus = ""
                     newAutocall = ""
 
-                    // Vai all'ultimo inserito
                     currentIndex = certificates.size
                 }
             },
             modifier = Modifier.fillMaxWidth()
         ) { Text("Aggiungi certificato") }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Pulsante per aggiornare tutti i prezzi
+        Button(
+            onClick = {
+                certificates.forEach {
+                    viewModel.fetchAndUpdatePrice(it.isin, "e1e60f41a11968b889595584e0a6c310")
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("Aggiorna tutti i prezzi") }
     }
 }
