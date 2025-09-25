@@ -4,41 +4,41 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.material3.Surface
+import androidx.lifecycle.ViewModelProvider
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+
+    private lateinit var certificatesViewModel: CertificatesViewModel
+    private lateinit var dao: CertificatesDao
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // 🔹 Ottieni DAO (da RoomDatabase)
+        dao = CertificatesDatabase.getDatabase(applicationContext).certificatesDao()
+
+        // 🔹 Crea ViewModel
+        certificatesViewModel = ViewModelProvider(
+            this,
+            CertificatesViewModelFactory(dao)
+        )[CertificatesViewModel::class.java]
+
         setContent {
             MaterialTheme {
-                // Ottieni DAO dal database
-                val dao = CertificatesDatabase.getDatabase(application).certificatesDao()
-
-                // Crea il ViewModel con la factory
-                val certificatesViewModel: CertificatesViewModel = viewModel(
-                    factory = CertificatesViewModelFactory(dao)
-                )
-
-                // Coroutine scope per aggiornamenti
-                val scope = rememberCoroutineScope()
-
-                // 🔹 Aggiornamento prezzi automatico all’avvio
-                LaunchedEffect(certificatesViewModel) {
-                    certificatesViewModel.certificates.collect { certList ->
-                        certList.forEach { cert ->
-                            scope.launch {
-                                certificatesViewModel.fetchAndUpdatePrice(cert.isin, "e1e60f41a11968b889595584e0a6c310")
-                            }
-                        }
-                    }
+                Surface {
+                    CertificatesScreen(certificatesViewModel)
                 }
+            }
+        }
 
-                // Composable principale
-                CertificatesScreen(viewModel = certificatesViewModel)
+        // 🔹 Aggiorna tutti i prezzi all’avvio
+        CoroutineScope(Dispatchers.Main).launch {
+            certificatesViewModel.certificates.value.forEach { cert ->
+                certificatesViewModel.fetchAndUpdatePrice(cert.isin) // ← nessun parametro API
             }
         }
     }

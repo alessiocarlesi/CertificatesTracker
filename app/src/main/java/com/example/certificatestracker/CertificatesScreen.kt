@@ -21,10 +21,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
     var newBonus by remember { mutableStateOf("") }
     var newAutocall by remember { mutableStateOf("") }
 
-    // Stato per evidenziare aggiornamenti recenti
     val recentlyUpdated = remember { mutableStateMapOf<String, Boolean>() }
-
-    // Coroutine scope per onClick
     val scope = rememberCoroutineScope()
 
     Column(modifier = Modifier.padding(16.dp)) {
@@ -33,26 +30,11 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
         if (certificates.isNotEmpty()) {
             val cert = certificates.getOrNull(currentIndex)
             cert?.let {
-
                 val textColor = if (recentlyUpdated[it.isin] == true) Color(0xFF008000) else Color.Black
 
-                // Funzione per calcolare la differenza %
-                fun percDiff(level: Double): String {
-                    if (level == 0.0) return "-"
-                    val diff = ((it.lastPrice - level) / level) * 100
-                    val sign = if (diff >= 0) "+" else ""
-                    return "$sign${"%.2f".format(diff)}%"
-                }
-
                 Text(
-                    text = buildString {
-                        append("ISIN: ${it.isin}\n")
-                        append("Sottostante: ${it.underlyingName} - Prezzo: ${it.lastPrice} EUR\n")
-                        append("Strike: ${it.strike} (${percDiff(it.strike)})\n")
-                        append("Barrier: ${it.barrier} (${percDiff(it.barrier)})\n")
-                        append("Bonus: ${it.bonusLevel} (${percDiff(it.bonusLevel)})\n")
-                        append("Autocall: ${it.autocallLevel} (${percDiff(it.autocallLevel)})")
-                    },
+                    text = "ISIN: ${it.isin}\nSottostante: ${it.underlyingName} - Prezzo: ${it.lastPrice} EUR\n" +
+                            "Strike: ${it.strike}\nBarrier: ${it.barrier}\nBonus: ${it.bonusLevel}\nAutocall: ${it.autocallLevel}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = textColor
                 )
@@ -170,7 +152,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
             onClick = {
                 certificates.forEach { cert ->
                     scope.launch {
-                        viewModel.fetchAndUpdatePrice(cert.isin, "e1e60f41a11968b889595584e0a6c310")
+                        viewModel.fetchAndUpdatePrice(cert.isin) // ✅ solo ISIN
                         recentlyUpdated[cert.isin] = true
                         delay(2000)
                         recentlyUpdated[cert.isin] = false

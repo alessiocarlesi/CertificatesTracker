@@ -11,6 +11,6 @@ data class Certificate(
     val barrier: Double = 0.0,
     val bonusLevel: Double = 0.0,
     val autocallLevel: Double = 0.0,
-    val lastPrice: Double = 0.0, // prezzo sottostante da Marketstack
-    val lastUpdate: String = ""  // data/ora ultimo aggiornamento
+    val lastPrice: Double = 0.0,          // prezzo sottostante
+    val lastUpdate: String = ""            // timestamp ultimo aggiornamento
 )

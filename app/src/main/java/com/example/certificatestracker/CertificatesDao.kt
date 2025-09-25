@@ -18,6 +18,9 @@ interface CertificatesDao {
     @Query("DELETE FROM certificates WHERE isin = :isin")
     suspend fun delete(isin: String)
 
-    @Query("UPDATE certificates SET lastPrice = :price, lastUpdate = :lastUpdate WHERE isin = :isin")
-    suspend fun updatePriceAndTimestamp(isin: String, price: Double, lastUpdate: String)
+    @Query("UPDATE certificates SET lastPrice = :price WHERE isin = :isin")
+    suspend fun updatePrice(isin: String, price: Double)
+
+    @Query("UPDATE certificates SET lastPrice = :price, lastUpdate = :timestamp WHERE isin = :isin")
+    suspend fun updatePriceAndTimestamp(isin: String, price: Double, timestamp: String)
 }

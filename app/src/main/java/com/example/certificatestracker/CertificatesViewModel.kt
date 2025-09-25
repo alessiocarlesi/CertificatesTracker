@@ -7,9 +7,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 class CertificatesViewModel(private val dao: CertificatesDao) : ViewModel() {
 
@@ -46,36 +43,35 @@ class CertificatesViewModel(private val dao: CertificatesDao) : ViewModel() {
         }
     }
 
-    fun updateCertificatePrice(isin: String, price: Double, timestamp: String) {
+    fun updateCertificatePrice(isin: String, price: Double) {
         viewModelScope.launch {
-            dao.updatePriceAndTimestamp(isin, price, timestamp)
+            dao.updatePrice(isin, price)
         }
     }
 
-    fun fetchAndUpdatePrice(isin: String, apiKey: String) {
+    fun fetchAndUpdatePrice(isin: String) {
         viewModelScope.launch {
-            // Trova certificato in lista
+            // Trova il certificato
             val certificate = certificates.value.find { it.isin == isin } ?: return@launch
             val symbol = certificate.underlyingName
 
-            // 🔹 Simulazione risposta API (usata ora in debug)
-            val simulatedPrice = 10.10
-            val now = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date())
-            updateCertificatePrice(isin, simulatedPrice, now)
-            println("SIMULAZIONE CERTIFICATO $isin -> prezzo chiusura: $simulatedPrice EUR @ $now")
-
-            /*
-            // 🔹 CODICE REALE (da riattivare dopo 1 ottobre)
-            val result = MarketstackFetcher.fetchLatestClose(symbol, apiKey)
+            // 🔹 Prima prova Marketstack
+            val result = MarketstackFetcher.fetchLatestClose(symbol, ApiKeys.MARKETSTACK)
 
             if (result is FetchResult.Success) {
-                val now = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date())
-                updateCertificatePrice(isin, result.close, now)
-                println("CERTIFICATO $isin -> prezzo chiusura aggiornato: ${result.close} EUR @ $now")
-            } else if (result is FetchResult.Error) {
-                println("ERRORE fetch $symbol -> ${result.message}")
+                updateCertificatePrice(isin, result.price)
+                println("CERTIFICATO $isin -> prezzo aggiornato Marketstack: ${result.price} EUR")
+            } else {
+                println("Marketstack limite superato, provo Alpha Vantage...")
+                val altResult = AlphaVantageFetcher.fetchLatestClose(symbol, ApiKeys.ALPHAVANTAGE)
+
+                if (altResult is FetchResult.Success) {
+                    updateCertificatePrice(isin, altResult.price)
+                    println("CERTIFICATO $isin -> prezzo aggiornato Alpha Vantage: ${altResult.price} EUR")
+                } else if (altResult is FetchResult.Error) {
+                    println("ERRORE fetch $symbol -> ${altResult.message}")
+                }
             }
-            */
         }
     }
 }
