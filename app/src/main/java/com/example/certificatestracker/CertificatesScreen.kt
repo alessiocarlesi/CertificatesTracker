@@ -36,8 +36,23 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
 
                 val textColor = if (recentlyUpdated[it.isin] == true) Color(0xFF008000) else Color.Black
 
+                // Funzione per calcolare la differenza %
+                fun percDiff(level: Double): String {
+                    if (level == 0.0) return "-"
+                    val diff = ((it.lastPrice - level) / level) * 100
+                    val sign = if (diff >= 0) "+" else ""
+                    return "$sign${"%.2f".format(diff)}%"
+                }
+
                 Text(
-                    text = "ISIN: ${it.isin}\nSottostante: ${it.underlyingName} - Prezzo: ${it.lastPrice} EUR\nStrike: ${it.strike}\nBarrier: ${it.barrier}\nBonus: ${it.bonusLevel}\nAutocall: ${it.autocallLevel}",
+                    text = buildString {
+                        append("ISIN: ${it.isin}\n")
+                        append("Sottostante: ${it.underlyingName} - Prezzo: ${it.lastPrice} EUR\n")
+                        append("Strike: ${it.strike} (${percDiff(it.strike)})\n")
+                        append("Barrier: ${it.barrier} (${percDiff(it.barrier)})\n")
+                        append("Bonus: ${it.bonusLevel} (${percDiff(it.bonusLevel)})\n")
+                        append("Autocall: ${it.autocallLevel} (${percDiff(it.autocallLevel)})")
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = textColor
                 )

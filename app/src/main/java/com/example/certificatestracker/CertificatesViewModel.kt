@@ -7,6 +7,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class CertificatesViewModel(private val dao: CertificatesDao) : ViewModel() {
 
@@ -43,45 +46,36 @@ class CertificatesViewModel(private val dao: CertificatesDao) : ViewModel() {
         }
     }
 
-    fun fetchLatestCloseForCertificate(symbol: String, apiKey: String) {
+    fun updateCertificatePrice(isin: String, price: Double, timestamp: String) {
         viewModelScope.launch {
-            // Chiamata sospesa
-            val result = MarketstackFetcher.fetchLatestClose(symbol, apiKey)
-            when (result) {
-                is FetchResult.Success -> {
-                    println("CERTIFICATO $symbol -> prezzo chiusura: ${result.close} EUR")
-                    // Qui potrai fare update in DB in futuro
-                }
-                is FetchResult.Error -> {
-                    println("ERRORE fetch $symbol -> ${result.message}")
-                }
-            }
-        }
-    }
-
-    fun updateCertificatePrice(isin: String, price: Double) {
-        viewModelScope.launch {
-            dao.updatePrice(isin, price)
+            dao.updatePriceAndTimestamp(isin, price, timestamp)
         }
     }
 
     fun fetchAndUpdatePrice(isin: String, apiKey: String) {
         viewModelScope.launch {
-            // Trova il sottostante corrispondente
+            // Trova certificato in lista
             val certificate = certificates.value.find { it.isin == isin } ?: return@launch
             val symbol = certificate.underlyingName
 
-            // Fetch prezzo
+            // 🔹 Simulazione risposta API (usata ora in debug)
+            val simulatedPrice = 10.10
+            val now = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date())
+            updateCertificatePrice(isin, simulatedPrice, now)
+            println("SIMULAZIONE CERTIFICATO $isin -> prezzo chiusura: $simulatedPrice EUR @ $now")
+
+            /*
+            // 🔹 CODICE REALE (da riattivare dopo 1 ottobre)
             val result = MarketstackFetcher.fetchLatestClose(symbol, apiKey)
 
             if (result is FetchResult.Success) {
-                updateCertificatePrice(isin, result.close)
-                println("CERTIFICATO $isin -> prezzo chiusura aggiornato: ${result.close} EUR")
+                val now = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date())
+                updateCertificatePrice(isin, result.close, now)
+                println("CERTIFICATO $isin -> prezzo chiusura aggiornato: ${result.close} EUR @ $now")
             } else if (result is FetchResult.Error) {
                 println("ERRORE fetch $symbol -> ${result.message}")
             }
+            */
         }
     }
-
 }
-
