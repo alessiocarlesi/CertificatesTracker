@@ -21,7 +21,10 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
     var newBonus by remember { mutableStateOf("") }
     var newAutocall by remember { mutableStateOf("") }
 
+    // Stato per evidenziare aggiornamenti recenti
     val recentlyUpdated = remember { mutableStateMapOf<String, Boolean>() }
+
+    // Coroutine scope per onClick
     val scope = rememberCoroutineScope()
 
     Column(modifier = Modifier.padding(16.dp)) {
@@ -30,11 +33,22 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
         if (certificates.isNotEmpty()) {
             val cert = certificates.getOrNull(currentIndex)
             cert?.let {
+
                 val textColor = if (recentlyUpdated[it.isin] == true) Color(0xFF008000) else Color.Black
 
+// Calcolo percentuali invertite rispetto al prezzo
+                val strikePerc = if (it.strike != 0.0) ((it.lastPrice - it.strike) / it.strike * 100) else 0.0
+                val barrierPerc = if (it.barrier != 0.0) ((it.lastPrice - it.barrier) / it.barrier * 100) else 0.0
+                val bonusPerc = if (it.bonusLevel != 0.0) ((it.lastPrice - it.bonusLevel) / it.bonusLevel * 100) else 0.0
+                val autocallPerc = if (it.autocallLevel != 0.0) ((it.lastPrice - it.autocallLevel) / it.autocallLevel * 100) else 0.0
+
                 Text(
-                    text = "ISIN: ${it.isin}\nSottostante: ${it.underlyingName} - Prezzo: ${it.lastPrice} EUR\n" +
-                            "Strike: ${it.strike}\nBarrier: ${it.barrier}\nBonus: ${it.bonusLevel}\nAutocall: ${it.autocallLevel}",
+                    text = "ISIN: ${it.isin} (${it.lastUpdate ?: "-"})\n" +
+                            "Sottostante: ${it.underlyingName} - Prezzo: ${it.lastPrice} EUR\n" +
+                            "Strike: ${it.strike} (${strikePerc.format(1)}%)\n" +
+                            "Barrier: ${it.barrier} (${barrierPerc.format(1)}%)\n" +
+                            "Bonus: ${it.bonusLevel} (${bonusPerc.format(1)}%)\n" +
+                            "Autocall: ${it.autocallLevel} (${autocallPerc.format(1)}%)",
                     style = MaterialTheme.typography.bodyMedium,
                     color = textColor
                 )
@@ -152,7 +166,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
             onClick = {
                 certificates.forEach { cert ->
                     scope.launch {
-                        viewModel.fetchAndUpdatePrice(cert.isin) // ✅ solo ISIN
+                        viewModel.fetchAndUpdatePrice(cert.isin)
                         recentlyUpdated[cert.isin] = true
                         delay(2000)
                         recentlyUpdated[cert.isin] = false
@@ -163,3 +177,6 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
         ) { Text("Aggiorna tutti i prezzi") }
     }
 }
+
+// Funzione di estensione per formattare percentuali
+fun Double.format(digits: Int) = "%.${digits}f".format(this)

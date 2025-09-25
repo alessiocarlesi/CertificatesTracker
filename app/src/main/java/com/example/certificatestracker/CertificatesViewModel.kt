@@ -7,6 +7,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class CertificatesViewModel(private val dao: CertificatesDao) : ViewModel() {
 
@@ -14,6 +17,9 @@ class CertificatesViewModel(private val dao: CertificatesDao) : ViewModel() {
         dao.getAllFlow()
             .map { it }
             .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    // Formatter per timestamp compatibile con API <26
+    private val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
 
     fun addCertificate(
         isin: String,
@@ -43,15 +49,15 @@ class CertificatesViewModel(private val dao: CertificatesDao) : ViewModel() {
         }
     }
 
-    fun updateCertificatePrice(isin: String, price: Double) {
+    private fun updateCertificatePriceAndTimestamp(isin: String, price: Double) {
+        val now = formatter.format(Date())
         viewModelScope.launch {
-            dao.updatePrice(isin, price)
+            dao.updatePriceAndTimestamp(isin, price, now)
         }
     }
 
     fun fetchAndUpdatePrice(isin: String) {
         viewModelScope.launch {
-            // Trova il certificato
             val certificate = certificates.value.find { it.isin == isin } ?: return@launch
             val symbol = certificate.underlyingName
 
@@ -59,14 +65,14 @@ class CertificatesViewModel(private val dao: CertificatesDao) : ViewModel() {
             val result = MarketstackFetcher.fetchLatestClose(symbol, ApiKeys.MARKETSTACK)
 
             if (result is FetchResult.Success) {
-                updateCertificatePrice(isin, result.price)
+                updateCertificatePriceAndTimestamp(isin, result.price)
                 println("CERTIFICATO $isin -> prezzo aggiornato Marketstack: ${result.price} EUR")
             } else {
                 println("Marketstack limite superato, provo Alpha Vantage...")
                 val altResult = AlphaVantageFetcher.fetchLatestClose(symbol, ApiKeys.ALPHAVANTAGE)
 
                 if (altResult is FetchResult.Success) {
-                    updateCertificatePrice(isin, altResult.price)
+                    updateCertificatePriceAndTimestamp(isin, altResult.price)
                     println("CERTIFICATO $isin -> prezzo aggiornato Alpha Vantage: ${altResult.price} EUR")
                 } else if (altResult is FetchResult.Error) {
                     println("ERRORE fetch $symbol -> ${altResult.message}")
