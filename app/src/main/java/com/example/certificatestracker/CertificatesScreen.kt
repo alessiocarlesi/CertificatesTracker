@@ -6,6 +6,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -21,16 +23,12 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
     var newBonus by remember { mutableStateOf("") }
     var newAutocall by remember { mutableStateOf("") }
 
-    // Stato per evidenziare aggiornamenti recenti
     val recentlyUpdated = remember { mutableStateMapOf<String, Boolean>() }
-
-    // Stato per evitare doppie fetch
-    val fetching = remember { mutableStateMapOf<String, Boolean>() }
-
     val scope = rememberCoroutineScope()
 
     Column(modifier = Modifier.padding(16.dp)) {
 
+        // Visualizzazione certificato corrente
         if (certificates.isNotEmpty()) {
             val cert = certificates.getOrNull(currentIndex)
             cert?.let {
@@ -43,7 +41,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
 
                 Text(
                     text = "ISIN: ${it.isin} (${it.lastUpdate ?: "-"})\n" +
-                            "Sottostante: ${it.underlyingName} - Prezzo: ${it.lastPrice ?: "-"} EUR\n" +
+                            "Sottostante: ${it.underlyingName} - Prezzo: ${it.lastPrice} EUR\n" +
                             "Strike: ${it.strike} (${strikePerc.format(1)}%)\n" +
                             "Barrier: ${it.barrier} (${barrierPerc.format(1)}%)\n" +
                             "Bonus: ${it.bonusLevel} (${bonusPerc.format(1)}%)\n" +
@@ -55,39 +53,26 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Row {
-                    Button(
-                        onClick = { if (currentIndex > 0) currentIndex-- },
-                        enabled = currentIndex > 0
-                    ) { Text("<") }
-
+                    Button(onClick = { if (currentIndex > 0) currentIndex-- }, enabled = currentIndex > 0) { Text("<") }
                     Spacer(modifier = Modifier.width(16.dp))
+                    Button(onClick = { if (currentIndex < certificates.size - 1) currentIndex++ }, enabled = currentIndex < certificates.size - 1) { Text(">") }
+                }
 
-                    Button(
-                        onClick = { if (currentIndex < certificates.size - 1) currentIndex++ },
-                        enabled = currentIndex < certificates.size - 1
-                    ) { Text(">") }
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Button(onClick = { viewModel.deleteCertificate(it.isin) }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Cancella questo certificato")
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Button(
-                    onClick = { viewModel.deleteCertificate(it.isin) },
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text("Cancella questo certificato") }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Button(
                     onClick = {
-                        if (fetching[it.isin] != true) {
-                            fetching[it.isin] = true
-                            scope.launch {
-                                viewModel.fetchAndUpdatePrice(it.isin)
-                                recentlyUpdated[it.isin] = true
-                                delay(2000)
-                                recentlyUpdated[it.isin] = false
-                                fetching[it.isin] = false
-                            }
+                        scope.launch {
+                            viewModel.fetchAndUpdatePrice(it.isin)
+                            recentlyUpdated[it.isin] = true
+                            delay(2000)
+                            recentlyUpdated[it.isin] = false
                         }
                     },
                     modifier = Modifier.fillMaxWidth()
@@ -99,49 +84,27 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Campi di inserimento nuovo certificato
-        OutlinedTextField(
-            value = newIsin,
-            onValueChange = { newIsin = it },
-            label = { Text("ISIN") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-        OutlinedTextField(
-            value = newUnderlying,
-            onValueChange = { newUnderlying = it },
-            label = { Text("Sottostante") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-        OutlinedTextField(
-            value = newStrike,
-            onValueChange = { newStrike = it },
-            label = { Text("Strike") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-        OutlinedTextField(
-            value = newBarrier,
-            onValueChange = { newBarrier = it },
-            label = { Text("Barrier") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-        OutlinedTextField(
-            value = newBonus,
-            onValueChange = { newBonus = it },
-            label = { Text("Bonus") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-        OutlinedTextField(
-            value = newAutocall,
-            onValueChange = { newAutocall = it },
-            label = { Text("Autocall Level") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
+        // Funzione helper per i campi di inserimento ridotti
+        @Composable
+        fun field(value: String, onChange: (String) -> Unit, label: String) {
+            OutlinedTextField(
+                value = value,
+                onValueChange = onChange,
+                label = { Text(label) },
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                textStyle = TextStyle(fontSize = 16.sp)
+            )
+        }
+
+        field(newIsin, { newIsin = it }, "ISIN")
+        field(newUnderlying, { newUnderlying = it }, "Sottostante")
+        field(newStrike, { newStrike = it }, "Strike")
+        field(newBarrier, { newBarrier = it }, "Barrier")
+        field(newBonus, { newBonus = it }, "Bonus")
+        field(newAutocall, { newAutocall = it }, "Autocall Level")
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -180,15 +143,11 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
         Button(
             onClick = {
                 certificates.forEach { cert ->
-                    if (fetching[cert.isin] != true) {
-                        fetching[cert.isin] = true
-                        scope.launch {
-                            viewModel.fetchAndUpdatePrice(cert.isin)
-                            recentlyUpdated[cert.isin] = true
-                            delay(2000)
-                            recentlyUpdated[cert.isin] = false
-                            fetching[cert.isin] = false
-                        }
+                    scope.launch {
+                        viewModel.fetchAndUpdatePrice(cert.isin)
+                        recentlyUpdated[cert.isin] = true
+                        delay(2000)
+                        recentlyUpdated[cert.isin] = false
                     }
                 }
             },
