@@ -24,19 +24,18 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
     // Stato per evidenziare aggiornamenti recenti
     val recentlyUpdated = remember { mutableStateMapOf<String, Boolean>() }
 
-    // Coroutine scope per onClick
+    // Stato per evitare doppie fetch
+    val fetching = remember { mutableStateMapOf<String, Boolean>() }
+
     val scope = rememberCoroutineScope()
 
     Column(modifier = Modifier.padding(16.dp)) {
 
-        // Navigazione tra certificati
         if (certificates.isNotEmpty()) {
             val cert = certificates.getOrNull(currentIndex)
             cert?.let {
-
                 val textColor = if (recentlyUpdated[it.isin] == true) Color(0xFF008000) else Color.Black
 
-// Calcolo percentuali invertite rispetto al prezzo
                 val strikePerc = if (it.strike != 0.0) ((it.lastPrice - it.strike) / it.strike * 100) else 0.0
                 val barrierPerc = if (it.barrier != 0.0) ((it.lastPrice - it.barrier) / it.barrier * 100) else 0.0
                 val bonusPerc = if (it.bonusLevel != 0.0) ((it.lastPrice - it.bonusLevel) / it.bonusLevel * 100) else 0.0
@@ -44,7 +43,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
 
                 Text(
                     text = "ISIN: ${it.isin} (${it.lastUpdate ?: "-"})\n" +
-                            "Sottostante: ${it.underlyingName} - Prezzo: ${it.lastPrice} EUR\n" +
+                            "Sottostante: ${it.underlyingName} - Prezzo: ${it.lastPrice ?: "-"} EUR\n" +
                             "Strike: ${it.strike} (${strikePerc.format(1)}%)\n" +
                             "Barrier: ${it.barrier} (${barrierPerc.format(1)}%)\n" +
                             "Bonus: ${it.bonusLevel} (${bonusPerc.format(1)}%)\n" +
@@ -75,6 +74,24 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                     onClick = { viewModel.deleteCertificate(it.isin) },
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("Cancella questo certificato") }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Button(
+                    onClick = {
+                        if (fetching[it.isin] != true) {
+                            fetching[it.isin] = true
+                            scope.launch {
+                                viewModel.fetchAndUpdatePrice(it.isin)
+                                recentlyUpdated[it.isin] = true
+                                delay(2000)
+                                recentlyUpdated[it.isin] = false
+                                fetching[it.isin] = false
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Aggiorna prezzo visibile") }
             }
         } else {
             Text("Nessun certificato inserito")
@@ -82,7 +99,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Campi di inserimento
+        // Campi di inserimento nuovo certificato
         OutlinedTextField(
             value = newIsin,
             onValueChange = { newIsin = it },
@@ -128,7 +145,6 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Pulsante per aggiungere certificato
         Button(
             onClick = {
                 if (newIsin.isNotEmpty()) {
@@ -161,15 +177,18 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Pulsante per aggiornare tutti i prezzi
         Button(
             onClick = {
                 certificates.forEach { cert ->
-                    scope.launch {
-                        viewModel.fetchAndUpdatePrice(cert.isin)
-                        recentlyUpdated[cert.isin] = true
-                        delay(2000)
-                        recentlyUpdated[cert.isin] = false
+                    if (fetching[cert.isin] != true) {
+                        fetching[cert.isin] = true
+                        scope.launch {
+                            viewModel.fetchAndUpdatePrice(cert.isin)
+                            recentlyUpdated[cert.isin] = true
+                            delay(2000)
+                            recentlyUpdated[cert.isin] = false
+                            fetching[cert.isin] = false
+                        }
                     }
                 }
             },
