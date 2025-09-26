@@ -18,7 +18,6 @@ class CertificatesViewModel(private val dao: CertificatesDao) : ViewModel() {
             .map { it }
             .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-    // Formatter per timestamp compatibile con API <26
     private val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
 
     fun addCertificate(
@@ -49,10 +48,9 @@ class CertificatesViewModel(private val dao: CertificatesDao) : ViewModel() {
         }
     }
 
-    private fun updateCertificatePriceAndTimestamp(isin: String, price: Double) {
-        val now = formatter.format(Date())
+    fun updateCertificatePrice(isin: String, price: Double, timestamp: String) {
         viewModelScope.launch {
-            dao.updatePriceAndTimestamp(isin, price, now)
+            dao.updatePriceAndTimestamp(isin, price, timestamp)
         }
     }
 
@@ -60,24 +58,33 @@ class CertificatesViewModel(private val dao: CertificatesDao) : ViewModel() {
         viewModelScope.launch {
             val certificate = certificates.value.find { it.isin == isin } ?: return@launch
             val symbol = certificate.underlyingName
+            val now = formatter.format(Date())
 
-            // 🔹 Prima prova Marketstack
-            val result = MarketstackFetcher.fetchLatestClose(symbol, ApiKeys.MARKETSTACK)
+            // 🔹 Prima prova TwelveData
+            val resultTwelve = TwelveDataFetcher.fetchLatestClose(symbol, ApiKeys.TWELVEDATA)
+            if (resultTwelve is FetchResult.Success) {
+                updateCertificatePrice(isin, resultTwelve.price, now)
+                println("CERTIFICATO $isin -> prezzo aggiornato TwelveData: ${resultTwelve.price} EUR, ora: $now")
+                return@launch
+            }
 
-            if (result is FetchResult.Success) {
-                updateCertificatePriceAndTimestamp(isin, result.price)
-                println("CERTIFICATO $isin -> prezzo aggiornato Marketstack: ${result.price} EUR")
-            } else {
-                println("Marketstack limite superato, provo Alpha Vantage...")
-                val altResult = AlphaVantageFetcher.fetchLatestClose(symbol, ApiKeys.ALPHAVANTAGE)
+            println("TwelveData limite superato o errore, provo Marketstack...")
+            val resultMarket = MarketstackFetcher.fetchLatestClose(symbol, ApiKeys.MARKETSTACK)
+            if (resultMarket is FetchResult.Success) {
+                updateCertificatePrice(isin, resultMarket.price, now)
+                println("CERTIFICATO $isin -> prezzo aggiornato Marketstack: ${resultMarket.price} EUR, ora: $now")
+                return@launch
+            }
 
-                if (altResult is FetchResult.Success) {
-                    updateCertificatePriceAndTimestamp(isin, altResult.price)
-                    println("CERTIFICATO $isin -> prezzo aggiornato Alpha Vantage: ${altResult.price} EUR")
-                } else if (altResult is FetchResult.Error) {
-                    println("ERRORE fetch $symbol -> ${altResult.message}")
-                }
+            println("Marketstack limite superato o errore, provo AlphaVantage...")
+            val resultAlpha = AlphaVantageFetcher.fetchLatestClose(symbol, ApiKeys.ALPHAVANTAGE)
+            if (resultAlpha is FetchResult.Success) {
+                updateCertificatePrice(isin, resultAlpha.price, now)
+                println("CERTIFICATO $isin -> prezzo aggiornato AlphaVantage: ${resultAlpha.price} EUR, ora: $now")
+            } else if (resultAlpha is FetchResult.Error) {
+                println("ERRORE fetch $symbol -> ${resultAlpha.message}")
             }
         }
     }
 }
+

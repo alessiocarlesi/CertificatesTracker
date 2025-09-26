@@ -7,15 +7,14 @@ import okhttp3.Request
 import com.google.gson.Gson
 import java.io.IOException
 
-data class MarketstackEodResponse(val data: List<EodData>?)
-data class EodData(val date: String?, val close: Double?)
+data class TwelveDataResponse(val close: String?, val datetime: String?)
 
-object MarketstackFetcher {
+object TwelveDataFetcher {
     private val client = OkHttpClient()
     private val gson = Gson()
 
     suspend fun fetchLatestClose(symbol: String, apiKey: String): FetchResult = withContext(Dispatchers.IO) {
-        val url = "http://api.marketstack.com/v1/eod?access_key=$apiKey&symbols=$symbol&limit=1&sort=desc"
+        val url = "https://api.twelvedata.com/eod?symbol=$symbol&apikey=$apiKey"
         val request = Request.Builder().url(url).build()
 
         try {
@@ -23,10 +22,9 @@ object MarketstackFetcher {
                 if (!response.isSuccessful) return@withContext FetchResult.Error("HTTP ${response.code}: ${response.message}")
 
                 val body = response.body?.string().orEmpty()
-                val parsed = gson.fromJson(body, MarketstackEodResponse::class.java)
-                val eod = parsed.data?.firstOrNull()
-                val close = eod?.close
-                if (close != null) return@withContext FetchResult.Success(close)
+                val parsed = gson.fromJson(body, TwelveDataResponse::class.java)
+                val price = parsed.close?.toDoubleOrNull()
+                if (price != null) return@withContext FetchResult.Success(price)
 
                 FetchResult.Error("No data available for $symbol")
             }
