@@ -12,6 +12,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 
 @Composable
 fun CertificatesScreen(viewModel: CertificatesViewModel) {
@@ -50,18 +52,20 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                 val bonusPerc = if (it.bonusLevel != 0.0) ((it.lastPrice - it.bonusLevel) / it.bonusLevel * 100) else 0.0
                 val autocallPerc = if (it.autocallLevel != 0.0) ((it.lastPrice - it.autocallLevel) / it.autocallLevel * 100) else 0.0
 
-                Text(
-                    text = "ISIN: ${it.isin} (${it.lastUpdate ?: "-"})\n" +
-                            "Sottostante: ${it.underlyingName} - Prezzo: ${it.lastPrice} EUR\n" +
-                            "Strike: ${it.strike} (${strikePerc.format(1)}%)\n" +
-                            "Barrier: ${it.barrier} (${barrierPerc.format(1)}%)\n" +
-                            "Bonus: ${it.bonusLevel} (${bonusPerc.format(1)}%) - " +
-                            "E: ${it.premio} - " +
-                            "il: ${it.nextbonus}\n" +
-                            "Autocall: ${it.autocallLevel} (${autocallPerc.format(1)}%) - Valutazione: ${it.valautocall}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = textColor
-                )
+
+                        Text(
+                            text = "ISIN: ${it.isin} (${it.lastUpdate ?: "-"})\n" +
+                                    "Sottostante: ${it.underlyingName} - Prezzo: ${it.lastPrice} EUR\n" +
+                                    "Strike: ${it.strike} (${strikePerc.format(1)}%)\n" +
+                                    "Barrier: ${it.barrier} (${barrierPerc.format(1)}%)\n" +
+                                    "Bonus: ${it.bonusLevel} (${bonusPerc.format(1)}%) - " +
+                                    "E: ${it.premio} - " +
+                                    "il: ${it.nextbonus}\n" +
+                                    "Autocall: ${it.autocallLevel} (${autocallPerc.format(1)}%) - Valutazione: ${it.valautocall}",
+                            color = textColor,
+                            fontSize = 14.sp,          // più alto
+                            fontWeight = FontWeight.Bold // grassetto
+                        )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
