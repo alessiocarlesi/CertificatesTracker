@@ -12,5 +12,8 @@ data class Certificate(
     val bonusLevel: Double = 0.0,
     val autocallLevel: Double = 0.0,
     val lastPrice: Double = 0.0,          // prezzo sottostante
-    val lastUpdate: String = ""            // timestamp ultimo aggiornamento, formato "yyyy-MM-dd HH:mm"
+    val lastUpdate: String = "",            // timestamp ultimo aggiornamento, formato "yyyy-MM-dd HH:mm"
+    val premio:Double=0.0,
+    val nextbonus:String="",
+    val valautocall:String=""
 )

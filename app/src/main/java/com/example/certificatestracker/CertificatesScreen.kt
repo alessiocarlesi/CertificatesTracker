@@ -1,12 +1,14 @@
 package com.example.certificatestracker
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -22,11 +24,20 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
     var newBarrier by remember { mutableStateOf("") }
     var newBonus by remember { mutableStateOf("") }
     var newAutocall by remember { mutableStateOf("") }
+    var newPremio by remember { mutableStateOf("") }
+    var newNextbonus by remember { mutableStateOf("") }
+    var newValautocall by remember { mutableStateOf("") }
 
     val recentlyUpdated = remember { mutableStateMapOf<String, Boolean>() }
     val scope = rememberCoroutineScope()
+    val scrollState = rememberScrollState() // Scroll verticale
 
-    Column(modifier = Modifier.padding(16.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(16.dp)
+    ) {
 
         // Visualizzazione certificato corrente
         if (certificates.isNotEmpty()) {
@@ -44,47 +55,62 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                             "Sottostante: ${it.underlyingName} - Prezzo: ${it.lastPrice} EUR\n" +
                             "Strike: ${it.strike} (${strikePerc.format(1)}%)\n" +
                             "Barrier: ${it.barrier} (${barrierPerc.format(1)}%)\n" +
-                            "Bonus: ${it.bonusLevel} (${bonusPerc.format(1)}%)\n" +
-                            "Autocall: ${it.autocallLevel} (${autocallPerc.format(1)}%)",
+                            "Bonus: ${it.bonusLevel} (${bonusPerc.format(1)}%) - " +
+                            "E: ${it.premio} - " +
+                            "il: ${it.nextbonus}\n" +
+                            "Autocall: ${it.autocallLevel} (${autocallPerc.format(1)}%) - Valutazione: ${it.valautocall}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = textColor
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                Row {
-                    Button(onClick = { if (currentIndex > 0) currentIndex-- }, enabled = currentIndex > 0) { Text("<") }
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Button(onClick = { if (currentIndex < certificates.size - 1) currentIndex++ }, enabled = currentIndex < certificates.size - 1) { Text(">") }
+                // FRECCE < >
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { if (currentIndex > 0) currentIndex-- },
+                        modifier = Modifier.weight(1f).height(30.dp),
+                        contentPadding = PaddingValues(vertical = 0.dp)
+                    ) { Text("<", fontSize = 12.sp) }
+
+                    Button(
+                        onClick = { if (currentIndex < certificates.size - 1) currentIndex++ },
+                        modifier = Modifier.weight(1f).height(30.dp),
+                        contentPadding = PaddingValues(vertical = 0.dp)
+                    ) { Text(">", fontSize = 12.sp) }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                Button(onClick = { viewModel.deleteCertificate(it.isin) }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Cancella questo certificato")
+                // BOTTONI Cancella / Aggiorna
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { viewModel.deleteCertificate(it.isin) },
+                        modifier = Modifier.weight(1f).height(30.dp),
+                        contentPadding = PaddingValues(vertical = 0.dp)
+                    ) { Text("Cancella", fontSize = 12.sp) }
+
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                viewModel.fetchAndUpdatePrice(it.isin)
+                                recentlyUpdated[it.isin] = true
+                                delay(2000)
+                                recentlyUpdated[it.isin] = false
+                            }
+                        },
+                        modifier = Modifier.weight(1f).height(30.dp),
+                        contentPadding = PaddingValues(vertical = 0.dp)
+                    ) { Text("Aggiorna", fontSize = 12.sp) }
                 }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Button(
-                    onClick = {
-                        scope.launch {
-                            viewModel.fetchAndUpdatePrice(it.isin)
-                            recentlyUpdated[it.isin] = true
-                            delay(2000)
-                            recentlyUpdated[it.isin] = false
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text("Aggiorna prezzo visibile") }
             }
         } else {
             Text("Nessun certificato inserito")
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // Funzione helper per i campi di inserimento ridotti
+        // Funzione helper per i campi di inserimento
         @Composable
         fun field(value: String, onChange: (String) -> Unit, label: String) {
             OutlinedTextField(
@@ -92,9 +118,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                 onValueChange = onChange,
                 label = { Text(label) },
                 singleLine = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
+                modifier = Modifier.fillMaxWidth(),
                 textStyle = TextStyle(fontSize = 16.sp)
             )
         }
@@ -105,54 +129,69 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
         field(newBarrier, { newBarrier = it }, "Barrier")
         field(newBonus, { newBonus = it }, "Bonus")
         field(newAutocall, { newAutocall = it }, "Autocall Level")
+        field(newPremio, { newPremio = it }, "Premio")
+        field(newNextbonus, { newNextbonus = it }, "Next Bonus")
+        field(newValautocall, { newValautocall = it }, "Valutazione Autocall")
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        Button(
-            onClick = {
-                if (newIsin.isNotEmpty()) {
-                    val strikeVal = newStrike.replace(',', '.').toDoubleOrNull() ?: 0.0
-                    val barrierVal = newBarrier.replace(',', '.').toDoubleOrNull() ?: 0.0
-                    val bonusVal = newBonus.replace(',', '.').toDoubleOrNull() ?: 0.0
-                    val autocallVal = newAutocall.replace(',', '.').toDoubleOrNull() ?: 0.0
+        // BOTTONI Aggiungi / Aggiorna tutti
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = {
+                    if (newIsin.isNotEmpty()) {
+                        val strikeVal = newStrike.replace(',', '.').toDoubleOrNull() ?: 0.0
+                        val barrierVal = newBarrier.replace(',', '.').toDoubleOrNull() ?: 0.0
+                        val bonusVal = newBonus.replace(',', '.').toDoubleOrNull() ?: 0.0
+                        val autocallVal = newAutocall.replace(',', '.').toDoubleOrNull() ?: 0.0
+                        val premioVal = newPremio.replace(',', '.').toDoubleOrNull() ?: 0.0
 
-                    viewModel.addCertificate(
-                        isin = newIsin,
-                        underlyingName = newUnderlying,
-                        strike = strikeVal,
-                        barrier = barrierVal,
-                        bonusLevel = bonusVal,
-                        autocallLevel = autocallVal
-                    )
+                        viewModel.addCertificate(
+                            isin = newIsin,
+                            underlyingName = newUnderlying,
+                            strike = strikeVal,
+                            barrier = barrierVal,
+                            bonusLevel = bonusVal,
+                            autocallLevel = autocallVal,
+                            premio = premioVal,
+                            nextbonus = newNextbonus,
+                            valautocall = newValautocall
+                        )
 
-                    newIsin = ""
-                    newUnderlying = ""
-                    newStrike = ""
-                    newBarrier = ""
-                    newBonus = ""
-                    newAutocall = ""
+                        newIsin = ""
+                        newUnderlying = ""
+                        newStrike = ""
+                        newBarrier = ""
+                        newBonus = ""
+                        newAutocall = ""
+                        newPremio = ""
+                        newNextbonus = ""
+                        newValautocall = ""
 
-                    currentIndex = certificates.size
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("Aggiungi certificato") }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Button(
-            onClick = {
-                certificates.forEach { cert ->
-                    scope.launch {
-                        viewModel.fetchAndUpdatePrice(cert.isin)
-                        recentlyUpdated[cert.isin] = true
-                        delay(2000)
-                        recentlyUpdated[cert.isin] = false
+                        currentIndex = certificates.size
                     }
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("Aggiorna tutti i prezzi") }
+                },
+                modifier = Modifier.weight(1f).height(30.dp),
+                contentPadding = PaddingValues(vertical = 0.dp)
+            ) { Text("Aggiungi", fontSize = 12.sp) }
+
+            Button(
+                onClick = {
+                    certificates.forEach { cert ->
+                        scope.launch {
+                            viewModel.fetchAndUpdatePrice(cert.isin)
+                            recentlyUpdated[cert.isin] = true
+                            delay(2000)
+                            recentlyUpdated[cert.isin] = false
+                        }
+                    }
+                },
+                modifier = Modifier.weight(1f).height(30.dp),
+                contentPadding = PaddingValues(vertical = 0.dp)
+            ) { Text("Aggiorna tutti", fontSize = 12.sp) }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp)) // spazio finale
     }
 }
 

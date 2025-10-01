@@ -26,7 +26,10 @@ class CertificatesViewModel(private val dao: CertificatesDao) : ViewModel() {
         strike: Double,
         barrier: Double,
         bonusLevel: Double,
-        autocallLevel: Double
+        autocallLevel: Double,
+        premio: Double,          // nuovo
+        nextbonus: String,        // nuovo
+        valautocall: String       // nuovo
     ) {
         viewModelScope.launch {
             dao.insert(
@@ -36,11 +39,15 @@ class CertificatesViewModel(private val dao: CertificatesDao) : ViewModel() {
                     strike = strike,
                     barrier = barrier,
                     bonusLevel = bonusLevel,
-                    autocallLevel = autocallLevel
+                    autocallLevel = autocallLevel,
+                    premio = premio,
+                    nextbonus = nextbonus,
+                    valautocall = valautocall
                 )
             )
         }
     }
+
 
     fun deleteCertificate(isin: String) {
         viewModelScope.launch {
