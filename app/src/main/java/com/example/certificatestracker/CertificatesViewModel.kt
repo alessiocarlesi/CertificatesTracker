@@ -1,5 +1,6 @@
 package com.example.certificatestracker
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.SharingStarted
@@ -53,17 +54,24 @@ class CertificatesViewModel(
                     valautocall = valautocall
                 )
             )
+            Log.d("CERT_VIEWMODEL", "Inserted certificate: $isin")
         }
     }
 
     // 🔹 Elimina certificato
     fun deleteCertificate(isin: String) {
-        viewModelScope.launch { dao.delete(isin) }
+        viewModelScope.launch {
+            dao.delete(isin)
+            Log.d("CERT_VIEWMODEL", "Deleted certificate: $isin")
+        }
     }
 
     // 🔹 Aggiorna prezzo certificato con timestamp
     fun updateCertificatePrice(isin: String, price: Double, timestamp: String) {
-        viewModelScope.launch { dao.updatePriceAndTimestamp(isin, price, timestamp) }
+        viewModelScope.launch {
+            dao.updatePriceAndTimestamp(isin, price, timestamp)
+            Log.d("CERT_VIEWMODEL", "Updated price for $isin: $price at $timestamp")
+        }
     }
 
     // 🔹 Recupera prezzo più recente dalle API e aggiorna contatori
@@ -73,9 +81,12 @@ class CertificatesViewModel(
             val symbol = certificate.underlyingName
             val now = formatter.format(Date())
 
+            Log.d("API_QUERY", "Fetching price for $symbol ($isin)")
+
             // 🔹 TwelveData
             val resultTwelve = TwelveDataFetcher.fetchLatestClose(symbol, ApiKeys.TWELVEDATA)
             if (resultTwelve is FetchResult.Success) {
+                Log.d("API_RESPONSE", "TwelveData result for $symbol: ${resultTwelve.price}")
                 updateCertificatePrice(isin, resultTwelve.price, now)
                 incrementApiUsage("Twelve Data")
                 return@launch
@@ -84,6 +95,7 @@ class CertificatesViewModel(
             // 🔹 Marketstack
             val resultMarket = MarketstackFetcher.fetchLatestClose(symbol, ApiKeys.MARKETSTACK)
             if (resultMarket is FetchResult.Success) {
+                Log.d("API_RESPONSE", "Marketstack result for $symbol: ${resultMarket.price}")
                 updateCertificatePrice(isin, resultMarket.price, now)
                 incrementApiUsage("Marketstack")
                 return@launch
@@ -92,27 +104,30 @@ class CertificatesViewModel(
             // 🔹 AlphaVantage
             val resultAlpha = AlphaVantageFetcher.fetchLatestClose(symbol, ApiKeys.ALPHAVANTAGE)
             if (resultAlpha is FetchResult.Success) {
+                Log.d("API_RESPONSE", "AlphaVantage result for $symbol: ${resultAlpha.price}")
                 updateCertificatePrice(isin, resultAlpha.price, now)
                 incrementApiUsage("Alpha Vantage")
             }
         }
     }
 
-    // 🔹 Incrementa contatore query API
+    // 🔹 Incrementa contatore query API con log
     private fun incrementApiUsage(providerName: String) {
         viewModelScope.launch {
             val usage = apiUsageDao.get(providerName)
             val now = formatter.format(Date())
             if (usage != null) {
-                apiUsageDao.insert(
-                    usage.copy(
-                        dailyCount = usage.dailyCount + 1,
-                        monthlyCount = usage.monthlyCount + 1,
-                        lastUpdated = now
-                    )
+                val updated = usage.copy(
+                    dailyCount = usage.dailyCount + 1,
+                    monthlyCount = usage.monthlyCount + 1,
+                    lastUpdated = now
                 )
+                Log.d("API_USAGE", "Updating usage for $providerName: $updated")
+                apiUsageDao.insert(updated)
             } else {
-                apiUsageDao.insert(ApiUsage(providerName, 1, 1, now))
+                val newUsage = ApiUsage(providerName, 1, 1, now)
+                Log.d("API_USAGE", "Inserting new usage for $providerName: $newUsage")
+                apiUsageDao.insert(newUsage)
             }
         }
     }
