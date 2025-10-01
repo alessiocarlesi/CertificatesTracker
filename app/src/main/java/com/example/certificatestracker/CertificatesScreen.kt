@@ -10,14 +10,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
 
 @Composable
 fun CertificatesScreen(viewModel: CertificatesViewModel) {
     val certificates by viewModel.certificates.collectAsState(initial = emptyList())
+    val apiUsages by viewModel.apiUsages.collectAsState(initial = emptyList())
 
     var currentIndex by remember { mutableStateOf(0) }
     var newIsin by remember { mutableStateOf("") }
@@ -32,7 +32,10 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
 
     val recentlyUpdated = remember { mutableStateMapOf<String, Boolean>() }
     val scope = rememberCoroutineScope()
-    val scrollState = rememberScrollState() // Scroll verticale
+    val scrollState = rememberScrollState()
+
+    // Helper conversione sicura String -> Double
+    fun parseDoubleSafe(value: String): Double = value.replace(',', '.').toDoubleOrNull() ?: 0.0
 
     Column(
         modifier = Modifier
@@ -41,7 +44,6 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
             .padding(16.dp)
     ) {
 
-        // Visualizzazione certificato corrente
         if (certificates.isNotEmpty()) {
             val cert = certificates.getOrNull(currentIndex)
             cert?.let {
@@ -52,20 +54,34 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                 val bonusPerc = if (it.bonusLevel != 0.0) ((it.lastPrice - it.bonusLevel) / it.bonusLevel * 100) else 0.0
                 val autocallPerc = if (it.autocallLevel != 0.0) ((it.lastPrice - it.autocallLevel) / it.autocallLevel * 100) else 0.0
 
+                Text(
+                    text = "ISIN: ${it.isin} (${it.lastUpdate ?: "-"})\n" +
+                            "Sottostante: ${it.underlyingName} - Prezzo: ${it.lastPrice} EUR\n" +
+                            "Strike: ${it.strike} (${strikePerc.format(1)}%)\n" +
+                            "Barrier: ${it.barrier} (${barrierPerc.format(1)}%)\n" +
+                            "Bonus: ${it.bonusLevel} (${bonusPerc.format(1)}%) - " +
+                            "E: ${it.premio} - " +
+                            "il: ${it.nextbonus}\n" +
+                            "Autocall: ${it.autocallLevel} (${autocallPerc.format(1)}%) - Valutazione: ${it.valautocall}",
+                    color = textColor,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
 
-                        Text(
-                            text = "ISIN: ${it.isin} (${it.lastUpdate ?: "-"})\n" +
-                                    "Sottostante: ${it.underlyingName} - Prezzo: ${it.lastPrice} EUR\n" +
-                                    "Strike: ${it.strike} (${strikePerc.format(1)}%)\n" +
-                                    "Barrier: ${it.barrier} (${barrierPerc.format(1)}%)\n" +
-                                    "Bonus: ${it.bonusLevel} (${bonusPerc.format(1)}%) - " +
-                                    "E: ${it.premio} - " +
-                                    "il: ${it.nextbonus}\n" +
-                                    "Autocall: ${it.autocallLevel} (${autocallPerc.format(1)}%) - Valutazione: ${it.valautocall}",
-                            color = textColor,
-                            fontSize = 14.sp,          // più alto
-                            fontWeight = FontWeight.Bold // grassetto
-                        )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 🔹 Percentuali utilizzo API sopra le frecce
+                apiUsages.forEach { usage ->
+                    val provider = ApiProvider.values().firstOrNull { it.displayName == usage.providerName } ?: return@forEach
+                    val dailyPercent = usage.dailyCount * 100.0 / provider.dailyLimit
+                    val monthlyPercent = usage.monthlyCount * 100.0 / provider.monthlyLimit
+
+                    Text(
+                        text = "${provider.displayName}: Giornaliero ${dailyPercent.format(1)}%, Mensile ${monthlyPercent.format(1)}%",
+                        fontSize = 12.sp,
+                        color = Color.DarkGray
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -114,7 +130,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Funzione helper per i campi di inserimento
+        // Helper per i campi di inserimento
         @Composable
         fun field(value: String, onChange: (String) -> Unit, label: String) {
             OutlinedTextField(
@@ -144,20 +160,14 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
             Button(
                 onClick = {
                     if (newIsin.isNotEmpty()) {
-                        val strikeVal = newStrike.replace(',', '.').toDoubleOrNull() ?: 0.0
-                        val barrierVal = newBarrier.replace(',', '.').toDoubleOrNull() ?: 0.0
-                        val bonusVal = newBonus.replace(',', '.').toDoubleOrNull() ?: 0.0
-                        val autocallVal = newAutocall.replace(',', '.').toDoubleOrNull() ?: 0.0
-                        val premioVal = newPremio.replace(',', '.').toDoubleOrNull() ?: 0.0
-
                         viewModel.addCertificate(
                             isin = newIsin,
                             underlyingName = newUnderlying,
-                            strike = strikeVal,
-                            barrier = barrierVal,
-                            bonusLevel = bonusVal,
-                            autocallLevel = autocallVal,
-                            premio = premioVal,
+                            strike = parseDoubleSafe(newStrike),
+                            barrier = parseDoubleSafe(newBarrier),
+                            bonusLevel = parseDoubleSafe(newBonus),
+                            autocallLevel = parseDoubleSafe(newAutocall),
+                            premio = parseDoubleSafe(newPremio),
                             nextbonus = newNextbonus,
                             valautocall = newValautocall
                         )
@@ -193,9 +203,10 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                 modifier = Modifier.weight(1f).height(30.dp),
                 contentPadding = PaddingValues(vertical = 0.dp)
             ) { Text("Aggiorna tutti", fontSize = 12.sp) }
+
         }
 
-        Spacer(modifier = Modifier.height(16.dp)) // spazio finale
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 

@@ -1,3 +1,4 @@
+// filename: MainActivity.kt
 package com.example.certificatestracker
 
 import android.os.Bundle
@@ -14,17 +15,19 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var certificatesViewModel: CertificatesViewModel
     private lateinit var dao: CertificatesDao
+    private lateinit var apiUsageDao: ApiUsageDao
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 🔹 Ottieni DAO (da RoomDatabase)
+        // 🔹 Ottieni DAO
         dao = CertificatesDatabase.getDatabase(applicationContext).certificatesDao()
+        apiUsageDao = ApiUsageDatabase.getDatabase(applicationContext).apiUsageDao()
 
-        // 🔹 Crea ViewModel
+        // 🔹 Crea ViewModel con entrambi i DAO
         certificatesViewModel = ViewModelProvider(
             this,
-            CertificatesViewModelFactory(dao)
+            CertificatesViewModelFactory(dao, apiUsageDao)
         )[CertificatesViewModel::class.java]
 
         setContent {
@@ -38,7 +41,7 @@ class MainActivity : ComponentActivity() {
         // 🔹 Aggiorna tutti i prezzi all’avvio
         CoroutineScope(Dispatchers.Main).launch {
             certificatesViewModel.certificates.value.forEach { cert ->
-                certificatesViewModel.fetchAndUpdatePrice(cert.isin) // ← nessun parametro API
+                certificatesViewModel.fetchAndUpdatePrice(cert.isin)
             }
         }
     }
