@@ -6,14 +6,16 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "certificates")
 data class Certificate(
     @PrimaryKey val isin: String,
-    val underlyingName: String = "",
+    val underlyingName: String,
     val strike: Double = 0.0,
     val barrier: Double = 0.0,
     val bonusLevel: Double = 0.0,
+    val bonusMonths: Int = 0,
     val autocallLevel: Double = 0.0,
-    val lastPrice: Double = 0.0,          // prezzo sottostante
-    val lastUpdate: String = "",            // timestamp ultimo aggiornamento, formato "yyyy-MM-dd HH:mm"
-    val premio:Double=0.0,
-    val nextbonus:String="",
-    val valautocall:String=""
+    val autocallMonths: Int = 0,
+    val premio: Double = 0.0,
+    val nextbonus: String = "",
+    val valautocall: String = "",
+    val lastPrice: Double = 0.0,
+    val lastUpdate: String? = null
 )

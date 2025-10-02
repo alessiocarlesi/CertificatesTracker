@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun CertificatesScreen(viewModel: CertificatesViewModel) {
-    val certificates by viewModel.certificates.collectAsState(initial = emptyList())
+    val certificatesFlow by viewModel.certificates.collectAsState(initial = emptyList())
     val apiUsages by viewModel.apiUsages.collectAsState(initial = emptyList())
 
     var currentIndex by remember { mutableStateOf(0) }
@@ -34,15 +34,14 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
     val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
 
-    // Helper conversione sicura String -> Double
-    fun parseDoubleSafe(value: String): Double = value.replace(',', '.').toDoubleOrNull() ?: 0.0
-
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
             .padding(16.dp)
     ) {
+
+        val certificates = certificatesFlow.map { viewModel.updateDatesIfNeeded(it) }
 
         if (certificates.isNotEmpty()) {
             val cert = certificates.getOrNull(currentIndex)
@@ -59,10 +58,8 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                             "Sottostante: ${it.underlyingName} - Prezzo: ${it.lastPrice} EUR\n" +
                             "Strike: ${it.strike} (${strikePerc.format(1)}%)\n" +
                             "Barrier: ${it.barrier} (${barrierPerc.format(1)}%)\n" +
-                            "Bonus: ${it.bonusLevel} (${bonusPerc.format(1)}%) - " +
-                            "E: ${it.premio} - " +
-                            "il: ${formatDate( it.nextbonus )}\n" +
-                            "Autocall: ${it.autocallLevel} (${autocallPerc.format(1)}%) - Valutazione: ${formatDate( it.valautocall )}",
+                            "Bonus: ${it.bonusLevel} (${bonusPerc.format(1)}%) - E: ${it.premio} - il: ${it.nextbonus}\n" +
+                            "Autocall: ${it.autocallLevel} (${autocallPerc.format(1)}%) - Valutazione: ${it.valautocall}",
                     color = textColor,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold
@@ -70,7 +67,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // 🔹 Percentuali utilizzo API sopra le frecce
+                // 🔹 Mostra percentuali utilizzo API sopra le frecce
                 apiUsages.forEach { usage ->
                     val provider = ApiProvider.values().firstOrNull { it.displayName == usage.providerName } ?: return@forEach
                     val dailyPercent = usage.dailyCount * 100.0 / provider.dailyLimit
@@ -143,15 +140,29 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
             )
         }
 
-        field(newIsin, { newIsin = it }, "ISIN")
-        field(newUnderlying, { newUnderlying = it }, "Sottostante")
+        // INPUT CAMPI
+        field(newIsin, { newIsin = it.uppercase() }, "ISIN")
+        field(newUnderlying, { newUnderlying = it.uppercase() }, "Sottostante")
         field(newStrike, { newStrike = it }, "Strike")
         field(newBarrier, { newBarrier = it }, "Barrier")
-        field(newBonus, { newBonus = it }, "Bonus")
-        field(newAutocall, { newAutocall = it }, "Autocall Level")
+        field(newBonus, { newBonus = it }, "Bonus (es. 23@3)")
+        field(newAutocall, { newAutocall = it }, "Autocall Level (es. 45@6)")
         field(newPremio, { newPremio = it }, "Premio")
-        field(newNextbonus, { newNextbonus = it }, "Next Bonus")
-        field(newValautocall, { newValautocall = it }, "Valutazione Autocall")
+        field(newNextbonus, { input ->
+            val digits = input.filter { it.isDigit() }
+            newNextbonus = if (digits.length >= 6) formatDate(digits.substring(0,6)) else input
+        }, "Next Bonus (DDMMYY)")
+        field(newValautocall, { input ->
+            val digits = input.filter { it.isDigit() }
+            newValautocall = if (digits.length >= 6) formatDate(digits.substring(0,6)) else input
+        }, "Valutazione Autocall (DDMMYY)")
+
+        // Preview
+        val nextBonusDigits = newNextbonus.filter { it.isDigit() }
+        if (nextBonusDigits.length >= 6) Text("Preview: ${formatDate(nextBonusDigits.substring(0,6))}", fontSize = 12.sp, color = Color.Gray)
+
+        val valAutocallDigits = newValautocall.filter { it.isDigit() }
+        if (valAutocallDigits.length >= 6) Text("Preview: ${formatDate(valAutocallDigits.substring(0,6))}", fontSize = 12.sp, color = Color.Gray)
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -160,18 +171,33 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
             Button(
                 onClick = {
                     if (newIsin.isNotEmpty()) {
+                        val strikeVal = newStrike.replace(',', '.').toDoubleOrNull() ?: 0.0
+                        val barrierVal = newBarrier.replace(',', '.').toDoubleOrNull() ?: 0.0
+                        val premioVal = newPremio.replace(',', '.').toDoubleOrNull() ?: 0.0
+
+                        val bonusParts = newBonus.split("@")
+                        val bonusVal = bonusParts[0].replace(',', '.').toDoubleOrNull() ?: 0.0
+                        val bonusMonths = bonusParts.getOrNull(1)?.toIntOrNull() ?: 0
+
+                        val autocallParts = newAutocall.split("@")
+                        val autocallVal = autocallParts[0].replace(',', '.').toDoubleOrNull() ?: 0.0
+                        val autocallMonths = autocallParts.getOrNull(1)?.toIntOrNull() ?: 0
+
                         viewModel.addCertificate(
                             isin = newIsin,
                             underlyingName = newUnderlying,
-                            strike = parseDoubleSafe(newStrike),
-                            barrier = parseDoubleSafe(newBarrier),
-                            bonusLevel = parseDoubleSafe(newBonus),
-                            autocallLevel = parseDoubleSafe(newAutocall),
-                            premio = parseDoubleSafe(newPremio),
+                            strike = strikeVal,
+                            barrier = barrierVal,
+                            bonusLevel = bonusVal,
+                            bonusMonths = bonusMonths,
+                            autocallLevel = autocallVal,
+                            autocallMonths = autocallMonths,
+                            premio = premioVal,
                             nextbonus = newNextbonus,
                             valautocall = newValautocall
                         )
 
+                        // Reset input
                         newIsin = ""
                         newUnderlying = ""
                         newStrike = ""
@@ -203,12 +229,23 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                 modifier = Modifier.weight(1f).height(30.dp),
                 contentPadding = PaddingValues(vertical = 0.dp)
             ) { Text("Aggiorna tutti", fontSize = 12.sp) }
-
         }
 
         Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
-// Funzione di estensione per formattare percentuali
+// Estensione Double per percentuali
 fun Double.format(digits: Int) = "%.${digits}f".format(this)
+
+
+/*
+// Funzione helper per formattare date
+fun formatDate(input: String): String {
+    if (input.length != 6) return input
+    val day = input.substring(0,2)
+    val month = input.substring(2,4)
+    val year = input.substring(4,6).toIntOrNull()?.let { 2000 + it } ?: return input
+    return "$day/$month/$year"
+}
+*/

@@ -12,9 +12,9 @@ interface ApiUsageDao {
     @Query("SELECT * FROM api_usage")
     fun getAllFlow(): Flow<List<ApiUsage>>
 
-    @Query("SELECT * FROM api_usage WHERE providerName = :providerName LIMIT 1")
-    suspend fun get(providerName: String): ApiUsage?
-
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(apiUsage: ApiUsage)
+    suspend fun insert(usage: ApiUsage)
+
+    @Query("SELECT * FROM api_usage WHERE providerName = :providerName")
+    suspend fun get(providerName: String): ApiUsage?
 }

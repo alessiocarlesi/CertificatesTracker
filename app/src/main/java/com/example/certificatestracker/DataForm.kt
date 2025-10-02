@@ -1,5 +1,5 @@
 package com.example.certificatestracker
-fun formatDate(input: String): String {
+fun formatDateOld(input: String): String {
     if (input.length != 6) return input // ritorna così com'è se lunghezza non corretta
 
     val day = input.substring(0, 2)

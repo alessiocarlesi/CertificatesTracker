@@ -23,4 +23,12 @@ interface CertificatesDao {
 
     @Query("UPDATE certificates SET lastPrice = :price, lastUpdate = :timestamp WHERE isin = :isin")
     suspend fun updatePriceAndTimestamp(isin: String, price: Double, timestamp: String)
+
+    // 🔹 Aggiorna nextbonus persistente
+    @Query("UPDATE certificates SET nextbonus = :newDate WHERE isin = :isin")
+    suspend fun updateNextBonus(isin: String, newDate: String)
+
+    // 🔹 Aggiorna valautocall persistente
+    @Query("UPDATE certificates SET valautocall = :newDate WHERE isin = :isin")
+    suspend fun updateValAutocall(isin: String, newDate: String)
 }
