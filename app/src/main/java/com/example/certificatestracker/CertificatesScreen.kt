@@ -27,6 +27,12 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
     var newBonus by remember { mutableStateOf("") }
     var newAutocall by remember { mutableStateOf("") }
     var newPremio by remember { mutableStateOf("") }
+
+    // input grezzo per le date
+    var rawNextBonus by remember { mutableStateOf("") }
+    var rawValAutocall by remember { mutableStateOf("") }
+
+    // date finali
     var newNextbonus by remember { mutableStateOf("") }
     var newValautocall by remember { mutableStateOf("") }
 
@@ -67,7 +73,6 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // 🔹 Mostra percentuali utilizzo API sopra le frecce
                 apiUsages.forEach { usage ->
                     val provider = ApiProvider.values().firstOrNull { it.displayName == usage.providerName } ?: return@forEach
                     val dailyPercent = usage.dailyCount * 100.0 / provider.dailyLimit
@@ -84,41 +89,23 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
 
                 // FRECCE < >
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = { if (currentIndex > 0) currentIndex-- },
-                        modifier = Modifier.weight(1f).height(30.dp),
-                        contentPadding = PaddingValues(vertical = 0.dp)
-                    ) { Text("<", fontSize = 12.sp) }
-
-                    Button(
-                        onClick = { if (currentIndex < certificates.size - 1) currentIndex++ },
-                        modifier = Modifier.weight(1f).height(30.dp),
-                        contentPadding = PaddingValues(vertical = 0.dp)
-                    ) { Text(">", fontSize = 12.sp) }
+                    Button(onClick = { if (currentIndex > 0) currentIndex-- }, modifier = Modifier.weight(1f).height(30.dp)) { Text("<", fontSize = 12.sp) }
+                    Button(onClick = { if (currentIndex < certificates.size - 1) currentIndex++ }, modifier = Modifier.weight(1f).height(30.dp)) { Text(">", fontSize = 12.sp) }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // BOTTONI Cancella / Aggiorna
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = { viewModel.deleteCertificate(it.isin) },
-                        modifier = Modifier.weight(1f).height(30.dp),
-                        contentPadding = PaddingValues(vertical = 0.dp)
-                    ) { Text("Cancella", fontSize = 12.sp) }
-
-                    Button(
-                        onClick = {
-                            scope.launch {
-                                viewModel.fetchAndUpdatePrice(it.isin)
-                                recentlyUpdated[it.isin] = true
-                                delay(2000)
-                                recentlyUpdated[it.isin] = false
-                            }
-                        },
-                        modifier = Modifier.weight(1f).height(30.dp),
-                        contentPadding = PaddingValues(vertical = 0.dp)
-                    ) { Text("Aggiorna", fontSize = 12.sp) }
+                    Button(onClick = { viewModel.deleteCertificate(it.isin) }, modifier = Modifier.weight(1f).height(30.dp)) { Text("Cancella", fontSize = 12.sp) }
+                    Button(onClick = {
+                        scope.launch {
+                            viewModel.fetchAndUpdatePrice(it.isin)
+                            recentlyUpdated[it.isin] = true
+                            delay(2000)
+                            recentlyUpdated[it.isin] = false
+                        }
+                    }, modifier = Modifier.weight(1f).height(30.dp)) { Text("Aggiorna", fontSize = 12.sp) }
                 }
             }
         } else {
@@ -127,7 +114,6 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Helper per i campi di inserimento
         @Composable
         fun field(value: String, onChange: (String) -> Unit, label: String) {
             OutlinedTextField(
@@ -140,7 +126,6 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
             )
         }
 
-        // INPUT CAMPI
         field(newIsin, { newIsin = it.uppercase() }, "ISIN")
         field(newUnderlying, { newUnderlying = it.uppercase() }, "Sottostante")
         field(newStrike, { newStrike = it }, "Strike")
@@ -148,97 +133,66 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
         field(newBonus, { newBonus = it }, "Bonus (es. 23@3)")
         field(newAutocall, { newAutocall = it }, "Autocall Level (es. 45@6)")
         field(newPremio, { newPremio = it }, "Premio")
-        field(newNextbonus, { input ->
-            val digits = input.filter { it.isDigit() }
-            newNextbonus = if (digits.length >= 6) formatDate(digits.substring(0,6)) else input
-        }, "Next Bonus (DDMMYY)")
-        field(newValautocall, { input ->
-            val digits = input.filter { it.isDigit() }
-            newValautocall = if (digits.length >= 6) formatDate(digits.substring(0,6)) else input
-        }, "Valutazione Autocall (DDMMYY)")
+
+        field(rawNextBonus, { input -> rawNextBonus = input.filter { it.isDigit() } }, "Next Bonus (DDMMYY)")
+        field(rawValAutocall, { input -> rawValAutocall = input.filter { it.isDigit() } }, "Valutazione Autocall (DDMMYY)")
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // BOTTONI Aggiungi / Aggiorna tutti
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(
-                onClick = {
-                    if (newIsin.isNotEmpty()) {
-                        val strikeVal = newStrike.replace(',', '.').toDoubleOrNull() ?: 0.0
-                        val barrierVal = newBarrier.replace(',', '.').toDoubleOrNull() ?: 0.0
-                        val premioVal = newPremio.replace(',', '.').toDoubleOrNull() ?: 0.0
+            Button(onClick = {
+                if (newIsin.isNotEmpty()) {
+                    val strikeVal = newStrike.replace(',', '.').toDoubleOrNull() ?: 0.0
+                    val barrierVal = newBarrier.replace(',', '.').toDoubleOrNull() ?: 0.0
+                    val premioVal = newPremio.replace(',', '.').toDoubleOrNull() ?: 0.0
 
-                        val bonusParts = newBonus.split("@")
-                        val bonusVal = bonusParts[0].replace(',', '.').toDoubleOrNull() ?: 0.0
-                        val bonusMonths = bonusParts.getOrNull(1)?.toIntOrNull() ?: 0
+                    val bonusParts = newBonus.split("@")
+                    val bonusVal = bonusParts[0].replace(',', '.').toDoubleOrNull() ?: 0.0
+                    val bonusMonths = bonusParts.getOrNull(1)?.toIntOrNull() ?: 0
 
-                        val autocallParts = newAutocall.split("@")
-                        val autocallVal = autocallParts[0].replace(',', '.').toDoubleOrNull() ?: 0.0
-                        val autocallMonths = autocallParts.getOrNull(1)?.toIntOrNull() ?: 0
+                    val autocallParts = newAutocall.split("@")
+                    val autocallVal = autocallParts[0].replace(',', '.').toDoubleOrNull() ?: 0.0
+                    val autocallMonths = autocallParts.getOrNull(1)?.toIntOrNull() ?: 0
 
-                        viewModel.addCertificate(
-                            isin = newIsin,
-                            underlyingName = newUnderlying,
-                            strike = strikeVal,
-                            barrier = barrierVal,
-                            bonusLevel = bonusVal,
-                            bonusMonths = bonusMonths,
-                            autocallLevel = autocallVal,
-                            autocallMonths = autocallMonths,
-                            premio = premioVal,
-                            nextbonus = newNextbonus,
-                            valautocall = newValautocall
-                        )
+                    // converti date solo al momento dell’inserimento
+                    val nextBonusFinal = if (rawNextBonus.length == 6) formatDate(rawNextBonus) else rawNextBonus
+                    val valAutocallFinal = if (rawValAutocall.length == 6) formatDate(rawValAutocall) else rawValAutocall
 
-                        // Reset input
-                        newIsin = ""
-                        newUnderlying = ""
-                        newStrike = ""
-                        newBarrier = ""
-                        newBonus = ""
-                        newAutocall = ""
-                        newPremio = ""
-                        newNextbonus = ""
-                        newValautocall = ""
+                    viewModel.addCertificate(
+                        isin = newIsin,
+                        underlyingName = newUnderlying,
+                        strike = strikeVal,
+                        barrier = barrierVal,
+                        bonusLevel = bonusVal,
+                        bonusMonths = bonusMonths,
+                        autocallLevel = autocallVal,
+                        autocallMonths = autocallMonths,
+                        premio = premioVal,
+                        nextbonus = nextBonusFinal,
+                        valautocall = valAutocallFinal
+                    )
 
-                        currentIndex = certificates.size
-                    }
-                },
-                modifier = Modifier.weight(1f).height(30.dp),
-                contentPadding = PaddingValues(vertical = 0.dp)
-            ) { Text("Aggiungi", fontSize = 12.sp) }
+                    newIsin = ""
+                    newUnderlying = ""
+                    newStrike = ""
+                    newBarrier = ""
+                    newBonus = ""
+                    newAutocall = ""
+                    newPremio = ""
+                    rawNextBonus = ""
+                    rawValAutocall = ""
+                }
+            }, modifier = Modifier.weight(1f).height(30.dp)) { Text("Aggiungi", fontSize = 12.sp) }
 
-            Button(
-                onClick = {
-                    certificates.forEach { cert ->
-                        scope.launch {
-                            viewModel.fetchAndUpdatePrice(cert.isin)
-                            recentlyUpdated[cert.isin] = true
-                            delay(2000)
-                            recentlyUpdated[cert.isin] = false
-                        }
-                    }
-                },
-                modifier = Modifier.weight(1f).height(30.dp),
-                contentPadding = PaddingValues(vertical = 0.dp)
-            ) { Text("Aggiorna tutti", fontSize = 12.sp) }
+            Button(onClick = {
+                certificates.forEach { cert ->
+                    scope.launch { viewModel.fetchAndUpdatePrice(cert.isin) }
+                }
+            }, modifier = Modifier.weight(1f).height(30.dp)) { Text("Aggiorna tutti", fontSize = 12.sp) }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
-// Estensione Double per percentuali
 fun Double.format(digits: Int) = "%.${digits}f".format(this)
-
-
-/*
-// Funzione helper per formattare date
-fun formatDate(input: String): String {
-    if (input.length != 6) return input
-    val day = input.substring(0,2)
-    val month = input.substring(2,4)
-    val year = input.substring(4,6).toIntOrNull()?.let { 2000 + it } ?: return input
-    return "$day/$month/$year"
-}
-*/
