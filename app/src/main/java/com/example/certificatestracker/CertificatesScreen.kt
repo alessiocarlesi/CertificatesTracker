@@ -157,13 +157,6 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
             newValautocall = if (digits.length >= 6) formatDate(digits.substring(0,6)) else input
         }, "Valutazione Autocall (DDMMYY)")
 
-        // Preview
-        val nextBonusDigits = newNextbonus.filter { it.isDigit() }
-        if (nextBonusDigits.length >= 6) Text("Preview: ${formatDate(nextBonusDigits.substring(0,6))}", fontSize = 12.sp, color = Color.Gray)
-
-        val valAutocallDigits = newValautocall.filter { it.isDigit() }
-        if (valAutocallDigits.length >= 6) Text("Preview: ${formatDate(valAutocallDigits.substring(0,6))}", fontSize = 12.sp, color = Color.Gray)
-
         Spacer(modifier = Modifier.height(8.dp))
 
         // BOTTONI Aggiungi / Aggiorna tutti
