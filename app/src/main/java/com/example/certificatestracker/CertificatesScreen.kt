@@ -61,8 +61,8 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                             "Barrier: ${it.barrier} (${barrierPerc.format(1)}%)\n" +
                             "Bonus: ${it.bonusLevel} (${bonusPerc.format(1)}%) - " +
                             "E: ${it.premio} - " +
-                            "il: ${it.nextbonus}\n" +
-                            "Autocall: ${it.autocallLevel} (${autocallPerc.format(1)}%) - Valutazione: ${it.valautocall}",
+                            "il: ${formatDate( it.nextbonus )}\n" +
+                            "Autocall: ${it.autocallLevel} (${autocallPerc.format(1)}%) - Valutazione: ${formatDate( it.valautocall )}",
                     color = textColor,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold
