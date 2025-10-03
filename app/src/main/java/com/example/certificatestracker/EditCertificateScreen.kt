@@ -1,4 +1,3 @@
-// filename: EditCertificateScreen.kt
 package com.example.certificatestracker
 
 import androidx.compose.foundation.layout.*
@@ -19,7 +18,7 @@ fun EditCertificateScreen(
     viewModel: CertificatesViewModel,
     onDone: () -> Unit
 ) {
-    // Campi di testo
+    // 🔹 Campi di testo principali
     var isin by remember { mutableStateOf(certificate?.isin ?: "") }
     var underlyingName by remember { mutableStateOf(certificate?.underlyingName ?: "") }
     var strike by remember { mutableStateOf(certificate?.strike?.toString() ?: "") }
@@ -29,8 +28,14 @@ fun EditCertificateScreen(
     var autocallLevel by remember { mutableStateOf(certificate?.autocallLevel?.toString() ?: "") }
     var autocallMonths by remember { mutableStateOf(certificate?.autocallMonths?.toString() ?: "") }
     var premio by remember { mutableStateOf(certificate?.premio?.toString() ?: "") }
-    var nextbonus by remember { mutableStateOf(certificate?.nextbonus ?: "") }
-    var valautocall by remember { mutableStateOf(certificate?.valautocall ?: "") }
+
+    // 🔹 Campi grezzi per le date
+    var rawNextBonus by remember {
+        mutableStateOf(certificate?.nextbonus?.replace("/", "") ?: "")
+    }
+    var rawValAutocall by remember {
+        mutableStateOf(certificate?.valautocall?.replace("/", "") ?: "")
+    }
 
     val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
@@ -43,6 +48,7 @@ fun EditCertificateScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
 
+        // 🔹 Funzione di supporto per i campi
         @Composable
         fun field(value: String, onChange: (String) -> Unit, label: String) {
             OutlinedTextField(
@@ -57,6 +63,7 @@ fun EditCertificateScreen(
             )
         }
 
+        // 🔹 Campi principali
         field(isin, { isin = it.uppercase() }, "ISIN")
         field(underlyingName, { underlyingName = it.uppercase() }, "Sottostante")
         field(strike, { strike = it }, "Strike")
@@ -66,15 +73,22 @@ fun EditCertificateScreen(
         field(autocallLevel, { autocallLevel = it }, "Autocall Level")
         field(autocallMonths, { autocallMonths = it }, "Autocall Months")
         field(premio, { premio = it }, "Premio")
-        field(nextbonus, { nextbonus = it }, "Next Bonus (DD/MM/YYYY)")
-        field(valautocall, { valautocall = it }, "Valutazione Autocall (DD/MM/YYYY)")
+
+        // 🔹 Campi grezzi per le date
+        field(rawNextBonus, { input -> rawNextBonus = input.filter { it.isDigit() } }, "Next Bonus (DDMMYY)")
+        field(rawValAutocall, { input -> rawValAutocall = input.filter { it.isDigit() } }, "Valutazione Autocall (DDMMYY)")
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // 🔹 Bottoni Aggiungi/Aggiorna e Annulla
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = {
                     scope.launch {
+                        // 🔹 Conversione finale delle date solo qui
+                        val nextBonusFinal = if (rawNextBonus.length == 6) formatDate(rawNextBonus) else rawNextBonus
+                        val valAutocallFinal = if (rawValAutocall.length == 6) formatDate(rawValAutocall) else rawValAutocall
+
                         val newCertificate = Certificate(
                             isin = isin,
                             underlyingName = underlyingName,
@@ -85,8 +99,8 @@ fun EditCertificateScreen(
                             autocallLevel = autocallLevel.toDoubleOrNull() ?: 0.0,
                             autocallMonths = autocallMonths.toIntOrNull() ?: 0,
                             premio = premio.toDoubleOrNull() ?: 0.0,
-                            nextbonus = nextbonus,
-                            valautocall = valautocall,
+                            nextbonus = nextBonusFinal,
+                            valautocall = valAutocallFinal,
                             lastPrice = certificate?.lastPrice ?: 0.0,
                             lastUpdate = certificate?.lastUpdate
                         )
@@ -137,3 +151,15 @@ fun EditCertificateScreen(
         Spacer(modifier = Modifier.height(16.dp))
     }
 }
+
+
+/*
+// 🔹 Funzione di conversione DDMMYY → DD/MM/YYYY
+fun formatDate(input: String): String {
+    if (input.length != 6) return input
+    val day = input.substring(0, 2)
+    val month = input.substring(2, 4)
+    val year = input.substring(4, 6).toIntOrNull()?.let { 2000 + it } ?: return input
+    return "$day/$month/$year"
+}
+*/
