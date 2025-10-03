@@ -9,7 +9,7 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.certificatestracker"
+        applicationId = "com.example.certificates"
         minSdk = 24
         targetSdk = 34
         versionCode = 1
@@ -84,6 +84,7 @@ dependencies {
     implementation("com.google.code.gson:gson:2.10.1")
     testImplementation("junit:junit:4.13.2")
     // ... le tue dipendenze già presenti
+    implementation("androidx.navigation:navigation-compose:2.7.2")
 
     // ✅ per le chiamate HTTP
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
