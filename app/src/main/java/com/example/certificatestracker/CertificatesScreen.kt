@@ -85,19 +85,27 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(30.dp))
 
                     // 🔹 Navigazione tra certificati
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { if (currentIndex > 0) currentIndex-- }, modifier = Modifier.weight(1f).height(30.dp)) { Text("<", fontSize = 12.sp) }
-                        Button(onClick = { if (currentIndex < certificates.size - 1) currentIndex++ }, modifier = Modifier.weight(1f).height(30.dp)) { Text(">", fontSize = 12.sp) }
+                        Button(onClick = { if (currentIndex > 0) currentIndex-- }, modifier = Modifier.weight(1f).height(60.dp)) { Text("<", fontSize = 40.sp) }
+                        Button(onClick = { if (currentIndex < certificates.size - 1) currentIndex++ }, modifier = Modifier.weight(1f).height(60.dp)) { Text(">", fontSize = 40.sp) }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(40.dp))
 
                     // 🔹 Bottoni Azioni
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { viewModel.deleteCertificate(it.isin) }, modifier = Modifier.weight(1f).height(30.dp)) { Text("Cancella", fontSize = 12.sp) }
+                        Button(
+                            onClick = { viewModel.deleteCertificate(it.isin) },
+                            modifier = Modifier.weight(1f).height(50.dp)
+                        ) { Text("Cancella questo ISIN", fontSize = 20.sp) }
+                    }
+
+                    Spacer(modifier = Modifier.height(40.dp))
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = {
                             scope.launch {
                                 viewModel.fetchAndUpdatePrice(it.isin)
@@ -105,25 +113,39 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                                 delay(2000)
                                 recentlyUpdated[it.isin] = false
                             }
-                        }, modifier = Modifier.weight(1f).height(30.dp)) { Text("Aggiorna", fontSize = 12.sp) }
+                        }, modifier = Modifier.weight(1f).height(50.dp)) {
+                            Text(
+                                "Aggiorna prezzo",    
+                                fontSize = 20.sp
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(40.dp))
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = {
                             selectedCert = it
                             showEditScreen = true
-                        }, modifier = Modifier.weight(1f).height(30.dp)) { Text("Modifica", fontSize = 12.sp) }
+                        }, modifier = Modifier.weight(1f).height(50.dp)) { Text("Modifica questo ISIN", fontSize = 20.sp) }
                     }
                 }
             } else {
                 Text("Nessun certificato inserito")
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(40.dp))
 
             // 🔹 Bottone Aggiungi Nuovo
-            Button(onClick = {
-                selectedCert = null
-                showEditScreen = true
-            }, modifier = Modifier.fillMaxWidth()) {
-                Text("Aggiungi nuovo certificato")
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = {
+                        selectedCert = null
+                        showEditScreen = true
+                    },
+                    modifier = Modifier.weight(1f).height(50.dp)
+                ) { Text("Aggiungi nuovo certificato", fontSize = 20.sp) }
             }
         }
     }
