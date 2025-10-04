@@ -109,7 +109,9 @@ class CertificatesViewModel(
     // Aggiorna prezzo direttamente in DB (usata quando abbiamo già il prezzo)
     private fun updateCertificatePrice(isin: String, price: Double, timestamp: String) {
         viewModelScope.launch {
-            dao.updatePriceAndTimestamp(isin, price, timestamp)
+            val safePrice = price ?: 0.0                   // fallback se price è null
+            val roundedPrice = (kotlin.math.round(safePrice * 100) / 100.0)
+            dao.updatePriceAndTimestamp(isin, roundedPrice, timestamp)
             Log.d("ViewModel", "Updated price for $isin: $price at $timestamp")
         }
     }
