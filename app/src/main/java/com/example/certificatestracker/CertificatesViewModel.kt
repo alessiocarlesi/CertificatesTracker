@@ -1,3 +1,4 @@
+// filename: CertificatesViewModel.kt
 package com.example.certificatestracker
 
 import android.util.Log
@@ -15,59 +16,40 @@ class CertificatesViewModel(
     private val apiUsageDao: ApiUsageDao
 ) : ViewModel() {
 
+    private val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+
+    // Flussi
     val certificates: StateFlow<List<Certificate>> =
         dao.getAllFlow().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     val apiUsages: StateFlow<List<ApiUsage>> =
         apiUsageDao.getAllFlow().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-    private val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
-
-    // 🔹 Aggiungi nuovo certificato
-    fun addCertificate(
-        isin: String,
-        underlyingName: String,
-        strike: Double,
-        bonusLevel: Double,
-        bonusMonths: Int,
-        autocallLevel: Double,
-        autocallMonths: Int,
-        barrier: Double,
-        premio: Double,
-        nextbonus: String,
-        valautocall: String
-    ) {
+    // Aggiungi/Inserisci certificato (usa Room REPLACE)
+    fun addCertificate(certificate: Certificate) {
         viewModelScope.launch {
-            dao.insert(
-                Certificate(
-                    isin = isin,
-                    underlyingName = underlyingName,
-                    strike = strike,
-                    barrier = barrier,
-                    bonusLevel = bonusLevel,
-                    bonusMonths = bonusMonths,
-                    autocallLevel = autocallLevel,
-                    autocallMonths = autocallMonths,
-                    premio = premio,
-                    nextbonus = nextbonus,
-                    valautocall = valautocall
-                )
-            )
-            Log.d("ViewModel", "Inserted certificate: $isin")
+            dao.insert(certificate)
+            Log.d("ViewModel", "Inserted certificate: ${certificate.isin}")
         }
     }
 
+    // Aggiorna certificato (oggetto completo)
+    fun updateCertificate(certificate: Certificate) {
+        viewModelScope.launch {
+            dao.update(certificate)
+            Log.d("ViewModel", "Updated certificate: ${certificate.isin}")
+        }
+    }
+
+    // Elimina certificato
     fun deleteCertificate(isin: String) {
-        viewModelScope.launch { dao.delete(isin); Log.d("ViewModel", "Deleted certificate: $isin") }
-    }
-
-    fun updateCertificatePrice(isin: String, price: Double, timestamp: String) {
         viewModelScope.launch {
-            dao.updatePriceAndTimestamp(isin, price, timestamp)
-            Log.d("ViewModel", "Updated price for $isin: $price at $timestamp")
+            dao.deleteByIsin(isin)
+            Log.d("ViewModel", "Deleted certificate: $isin")
         }
     }
 
+    // Aggiorna prezzo e timestamp chiamando i provider in ordine (TwelveData -> Marketstack -> AlphaVantage)
     fun fetchAndUpdatePrice(isin: String) {
         viewModelScope.launch {
             val cert = certificates.value.find { it.isin == isin } ?: return@launch
@@ -75,43 +57,76 @@ class CertificatesViewModel(
             val now = formatter.format(Date())
 
             // TwelveData
-            Log.d("ViewModel", "Fetching price from TwelveData for $symbol")
-            val resultTwelve = TwelveDataFetcher.fetchLatestClose(symbol, ApiKeys.TWELVEDATA)
-            if (resultTwelve is FetchResult.Success) {
-                updateCertificatePrice(isin, resultTwelve.price, now)
-                incrementApiUsage("Twelve Data")
-                return@launch
+            try {
+                Log.d("ViewModel", "Fetching price from TwelveData for $symbol")
+                val resultTwelve = TwelveDataFetcher.fetchLatestClose(symbol, ApiKeys.TWELVEDATA)
+                if (resultTwelve is FetchResult.Success) {
+                    updateCertificatePrice(isin, resultTwelve.price, now)
+                    incrementApiUsage("Twelve Data")
+                    return@launch
+                } else if (resultTwelve is FetchResult.Error) {
+                    Log.d("ViewModel", "TwelveData error for $symbol: ${resultTwelve.message}")
+                }
+            } catch (t: Throwable) {
+                Log.e("ViewModel", "TwelveData exception for $symbol", t)
             }
 
             // Marketstack
-            Log.d("ViewModel", "Fetching price from Marketstack for $symbol")
-            val resultMarket = MarketstackFetcher.fetchLatestClose(symbol, ApiKeys.MARKETSTACK)
-            if (resultMarket is FetchResult.Success) {
-                updateCertificatePrice(isin, resultMarket.price, now)
-                incrementApiUsage("Marketstack")
-                return@launch
+            try {
+                Log.d("ViewModel", "Fetching price from Marketstack for $symbol")
+                val resultMarket = MarketstackFetcher.fetchLatestClose(symbol, ApiKeys.MARKETSTACK)
+                if (resultMarket is FetchResult.Success) {
+                    updateCertificatePrice(isin, resultMarket.price, now)
+                    incrementApiUsage("Marketstack")
+                    return@launch
+                } else if (resultMarket is FetchResult.Error) {
+                    Log.d("ViewModel", "Marketstack error for $symbol: ${resultMarket.message}")
+                }
+            } catch (t: Throwable) {
+                Log.e("ViewModel", "Marketstack exception for $symbol", t)
             }
 
             // AlphaVantage
-            Log.d("ViewModel", "Fetching price from AlphaVantage for $symbol")
-            val resultAlpha = AlphaVantageFetcher.fetchLatestClose(symbol, ApiKeys.ALPHAVANTAGE)
-            if (resultAlpha is FetchResult.Success) {
-                updateCertificatePrice(isin, resultAlpha.price, now)
-                incrementApiUsage("Alpha Vantage")
+            try {
+                Log.d("ViewModel", "Fetching price from AlphaVantage for $symbol")
+                val resultAlpha = AlphaVantageFetcher.fetchLatestClose(symbol, ApiKeys.ALPHAVANTAGE)
+                if (resultAlpha is FetchResult.Success) {
+                    updateCertificatePrice(isin, resultAlpha.price, now)
+                    incrementApiUsage("Alpha Vantage")
+                    return@launch
+                } else if (resultAlpha is FetchResult.Error) {
+                    Log.d("ViewModel", "AlphaVantage error for $symbol: ${resultAlpha.message}")
+                }
+            } catch (t: Throwable) {
+                Log.e("ViewModel", "AlphaVantage exception for $symbol", t)
             }
+
+            // Se arriviamo qui, nessun provider ha risposto con successo
+            Log.w("ViewModel", "No price available for $symbol from configured providers")
         }
     }
 
+    // Aggiorna prezzo direttamente in DB (usata quando abbiamo già il prezzo)
+    private fun updateCertificatePrice(isin: String, price: Double, timestamp: String) {
+        viewModelScope.launch {
+            dao.updatePriceAndTimestamp(isin, price, timestamp)
+            Log.d("ViewModel", "Updated price for $isin: $price at $timestamp")
+        }
+    }
+
+    // Incremento contatori API
     private fun incrementApiUsage(providerName: String) {
         viewModelScope.launch {
             val usage = apiUsageDao.get(providerName)
             val now = formatter.format(Date())
             if (usage != null) {
-                apiUsageDao.insert(usage.copy(
-                    dailyCount = usage.dailyCount + 1,
-                    monthlyCount = usage.monthlyCount + 1,
-                    lastUpdated = now
-                ))
+                apiUsageDao.insert(
+                    usage.copy(
+                        dailyCount = usage.dailyCount + 1,
+                        monthlyCount = usage.monthlyCount + 1,
+                        lastUpdated = now
+                    )
+                )
             } else {
                 apiUsageDao.insert(ApiUsage(providerName, 1, 1, now))
             }
@@ -119,9 +134,10 @@ class CertificatesViewModel(
         }
     }
 
+    // Parse helper (se serve)
     fun parseDouble(input: String) = input.replace(',', '.').toDoubleOrNull() ?: 0.0
 
-    // 🔹 Incremento mesi su nextbonus e valautocall
+    // Aggiorna nextbonus e valautocall se necessario (mantiene il comportamento precedente)
     fun updateDatesIfNeeded(cert: Certificate): Certificate {
         var updatedNextbonus = cert.nextbonus
         var updatedValautocall = cert.valautocall

@@ -18,7 +18,7 @@ fun EditCertificateScreen(
     viewModel: CertificatesViewModel,
     onDone: () -> Unit
 ) {
-    // 🔹 Campi di testo principali
+    // 🔹 Campi principali
     var isin by remember { mutableStateOf(certificate?.isin ?: "") }
     var underlyingName by remember { mutableStateOf(certificate?.underlyingName ?: "") }
     var strike by remember { mutableStateOf(certificate?.strike?.toString() ?: "") }
@@ -30,12 +30,11 @@ fun EditCertificateScreen(
     var premio by remember { mutableStateOf(certificate?.premio?.toString() ?: "") }
 
     // 🔹 Campi grezzi per le date
-    var rawNextBonus by remember {
-        mutableStateOf(certificate?.nextbonus?.replace("/", "") ?: "")
-    }
-    var rawValAutocall by remember {
-        mutableStateOf(certificate?.valautocall?.replace("/", "") ?: "")
-    }
+    var rawNextBonus by remember { mutableStateOf(certificate?.nextbonus?.replace("/", "") ?: "") }
+    var rawValAutocall by remember { mutableStateOf(certificate?.valautocall?.replace("/", "") ?: "") }
+
+    // 🔹 Campo quantità
+    var quantity by remember { mutableStateOf(certificate?.quantity?.toString() ?: "") }
 
     val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
@@ -78,6 +77,9 @@ fun EditCertificateScreen(
         field(rawNextBonus, { input -> rawNextBonus = input.filter { it.isDigit() } }, "Next Bonus (DDMMYY)")
         field(rawValAutocall, { input -> rawValAutocall = input.filter { it.isDigit() } }, "Valutazione Autocall (DDMMYY)")
 
+        // 🔹 Campo quantità
+        field(quantity, { quantity = it.filter { ch -> ch.isDigit() } }, "Quantità")
+
         Spacer(modifier = Modifier.height(16.dp))
 
         // 🔹 Bottoni Aggiungi/Aggiorna e Annulla
@@ -85,9 +87,10 @@ fun EditCertificateScreen(
             Button(
                 onClick = {
                     scope.launch {
-                        // 🔹 Conversione finale delle date solo qui
+                        // 🔹 Conversione finale delle date
                         val nextBonusFinal = if (rawNextBonus.length == 6) formatDate(rawNextBonus) else rawNextBonus
                         val valAutocallFinal = if (rawValAutocall.length == 6) formatDate(rawValAutocall) else rawValAutocall
+                        val quantityInt = quantity.toIntOrNull() ?: 0
 
                         val newCertificate = Certificate(
                             isin = isin,
@@ -102,38 +105,15 @@ fun EditCertificateScreen(
                             nextbonus = nextBonusFinal,
                             valautocall = valAutocallFinal,
                             lastPrice = certificate?.lastPrice ?: 0.0,
-                            lastUpdate = certificate?.lastUpdate
+                            lastUpdate = certificate?.lastUpdate,
+                            quantity = quantityInt
                         )
 
                         if (certificate == null) {
-                            viewModel.addCertificate(
-                                isin = newCertificate.isin,
-                                underlyingName = newCertificate.underlyingName,
-                                strike = newCertificate.strike,
-                                bonusLevel = newCertificate.bonusLevel,
-                                bonusMonths = newCertificate.bonusMonths,
-                                autocallLevel = newCertificate.autocallLevel,
-                                autocallMonths = newCertificate.autocallMonths,
-                                barrier = newCertificate.barrier,
-                                premio = newCertificate.premio,
-                                nextbonus = newCertificate.nextbonus,
-                                valautocall = newCertificate.valautocall
-                            )
+                            viewModel.addCertificate(newCertificate)
                         } else {
                             viewModel.deleteCertificate(certificate.isin)
-                            viewModel.addCertificate(
-                                isin = newCertificate.isin,
-                                underlyingName = newCertificate.underlyingName,
-                                strike = newCertificate.strike,
-                                bonusLevel = newCertificate.bonusLevel,
-                                bonusMonths = newCertificate.bonusMonths,
-                                autocallLevel = newCertificate.autocallLevel,
-                                autocallMonths = newCertificate.autocallMonths,
-                                barrier = newCertificate.barrier,
-                                premio = newCertificate.premio,
-                                nextbonus = newCertificate.nextbonus,
-                                valautocall = newCertificate.valautocall
-                            )
+                            viewModel.addCertificate(newCertificate)
                         }
 
                         onDone()
@@ -151,15 +131,3 @@ fun EditCertificateScreen(
         Spacer(modifier = Modifier.height(16.dp))
     }
 }
-
-
-/*
-// 🔹 Funzione di conversione DDMMYY → DD/MM/YYYY
-fun formatDate(input: String): String {
-    if (input.length != 6) return input
-    val day = input.substring(0, 2)
-    val month = input.substring(2, 4)
-    val year = input.substring(4, 6).toIntOrNull()?.let { 2000 + it } ?: return input
-    return "$day/$month/$year"
-}
-*/

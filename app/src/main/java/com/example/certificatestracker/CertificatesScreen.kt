@@ -63,6 +63,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                     Text(
                         text = "ISIN: ${it.isin} (${it.lastUpdate ?: "-"})\n" +
                                 "Sottostante: ${it.underlyingName} - Prezzo: ${it.lastPrice} EUR\n" +
+                                "Quantità: ${it.quantity}\n" +
                                 "Strike: ${it.strike} (${strikePerc.format(1)}%)\n" +
                                 "Barrier: ${it.barrier} (${barrierPerc.format(1)}%)\n" +
                                 "Bonus: ${it.bonusLevel} (${bonusPerc.format(1)}%) - E: ${it.premio} - il: ${it.nextbonus}\n" +
@@ -71,6 +72,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
                     )
+
 
                     Spacer(modifier = Modifier.height(8.dp))
 
@@ -133,10 +135,10 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = {
                             scope.launch {
-                                viewModel.fetchAndUpdatePrice(it.isin)
+                               viewModel.fetchAndUpdatePrice(it.isin)
                                 recentlyUpdated[it.isin] = true
                                 delay(2000)
-                                recentlyUpdated[it.isin] = false
+                               recentlyUpdated[it.isin] = false
                             }
                         }, modifier = Modifier.weight(1f).height(50.dp)) {
                             Text(

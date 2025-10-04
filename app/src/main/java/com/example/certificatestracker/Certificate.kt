@@ -17,5 +17,6 @@ data class Certificate(
     val nextbonus: String = "",
     val valautocall: String = "",
     val lastPrice: Double = 0.0,
-    val lastUpdate: String? = null
+    val lastUpdate: String? = null,
+    val quantity: Int = 0 // ✅ nuovo campo
 )
