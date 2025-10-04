@@ -20,9 +20,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 🔹 Ottieni DAO
-        dao = CertificatesDatabase.getDatabase(applicationContext).certificatesDao()
-        apiUsageDao = ApiUsageDatabase.getDatabase(applicationContext).apiUsageDao()
+        // 🔹 Ottieni il database in modo sicuro (restore se corrotto)
+        val safeDb = DatabaseBackupHelper.getSafeDatabase(applicationContext)
+
+        // 🔹 Ottieni DAO dal database sicuro
+        dao = safeDb.certificatesDao()
+        apiUsageDao = ApiUsageDatabase.getDatabase(applicationContext).apiUsageDao() // rimane separato se non vuoi backup su questo DB
 
         // 🔹 Crea ViewModel con entrambi i DAO
         certificatesViewModel = ViewModelProvider(
@@ -44,5 +47,8 @@ class MainActivity : ComponentActivity() {
                 certificatesViewModel.fetchAndUpdatePrice(cert.isin)
             }
         }
+
+        // 🔹 Salva subito un backup aggiornato del DB
+        DatabaseBackupHelper.backupDatabase(this)
     }
 }

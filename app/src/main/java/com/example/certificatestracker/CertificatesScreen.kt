@@ -14,6 +14,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextAlign
 
 @Composable
 fun CertificatesScreen(viewModel: CertificatesViewModel) {
@@ -86,11 +88,34 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                     }
 
                     Spacer(modifier = Modifier.height(30.dp))
+// 🔹 Navigazione tra certificati
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = { if (currentIndex > 0) currentIndex-- },
+                            modifier = Modifier.weight(1f).height(60.dp)
+                        ) {
+                            Text("<", fontSize = 40.sp)
+                        }
 
-                    // 🔹 Navigazione tra certificati
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { if (currentIndex > 0) currentIndex-- }, modifier = Modifier.weight(1f).height(60.dp)) { Text("<", fontSize = 40.sp) }
-                        Button(onClick = { if (currentIndex < certificates.size - 1) currentIndex++ }, modifier = Modifier.weight(1f).height(60.dp)) { Text(">", fontSize = 40.sp) }
+                        // Numero centrale (indice + totale)
+                        Text(
+                            text = "${currentIndex + 1} / ${certificates.size}",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f),
+                            textAlign = TextAlign.Center
+                        )
+
+                        Button(
+                            onClick = { if (currentIndex < certificates.size - 1) currentIndex++ },
+                            modifier = Modifier.weight(1f).height(60.dp)
+                        ) {
+                            Text(">", fontSize = 40.sp)
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(40.dp))
@@ -115,7 +140,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                             }
                         }, modifier = Modifier.weight(1f).height(50.dp)) {
                             Text(
-                                "Aggiorna prezzo",    
+                                "Aggiorna prezzo",
                                 fontSize = 20.sp
                             )
                         }

@@ -31,4 +31,10 @@ interface CertificatesDao {
     // 🔹 Aggiorna valautocall persistente
     @Query("UPDATE certificates SET valautocall = :newDate WHERE isin = :isin")
     suspend fun updateValAutocall(isin: String, newDate: String)
+
+    @Dao
+    interface CertificatesDao {
+        @Query("SELECT COUNT(*) FROM certificates")
+        suspend fun countCertificates(): Int
+    }
 }
