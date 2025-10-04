@@ -100,9 +100,10 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                             onClick = { if (currentIndex > 0) currentIndex-- },
                             modifier = Modifier.weight(1f).height(60.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFADD8E6), // celeste chiaro
-                                contentColor = Color.DarkGray           // testo nero
+                                containerColor = if (currentIndex == 0) Color.LightGray else Color(0xFFADD8E6), // grigio chiaro se primo record
+                                contentColor = Color.DarkGray // testo nero
                             )
+
                         ) {
 
                             Text("<", fontSize = 40.sp)
@@ -121,10 +122,11 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                         Button(
                             onClick = { if (currentIndex < certificates.size - 1) currentIndex++ },
                             modifier = Modifier.weight(1f).height(60.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFFADD8E6), // celeste chiaro
-                            contentColor = Color.DarkGray           // testo nero
-                        )
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (currentIndex == certificates.size - 1) Color.LightGray else Color(0xFFADD8E6), // grigio se ultimo
+                                contentColor = Color.DarkGray // testo nero
+                            )
+
                         ) {
                             Text(">", fontSize = 40.sp)
                         }
