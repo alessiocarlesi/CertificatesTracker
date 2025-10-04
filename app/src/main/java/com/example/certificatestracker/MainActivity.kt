@@ -36,6 +36,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 Surface {
+
                     CertificatesScreen(certificatesViewModel)
                 }
             }

@@ -66,7 +66,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                                 "Quantità: ${it.quantity}\n" +
                                 "Strike: ${it.strike} (${strikePerc.format(1)}%)\n" +
                                 "Barrier: ${it.barrier} (${barrierPerc.format(1)}%)\n" +
-                                "Bonus: ${it.bonusLevel} (${bonusPerc.format(1)}%) - E: ${it.premio} - il: ${it.nextbonus}\n" +
+                                "Bonus: ${it.bonusLevel} (${bonusPerc.format(1)}%) - ${(it.premio * it.quantity).format(2)} € - il: ${it.nextbonus}\n" +
                                 "Autocall: ${it.autocallLevel} (${autocallPerc.format(1)}%) - Valutazione: ${it.valautocall}",
                         color = textColor,
                         fontSize = 14.sp,
@@ -98,9 +98,15 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                     ) {
                         Button(
                             onClick = { if (currentIndex > 0) currentIndex-- },
-                            modifier = Modifier.weight(1f).height(60.dp)
+                            modifier = Modifier.weight(1f).height(60.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFADD8E6), // celeste chiaro
+                                contentColor = Color.DarkGray           // testo nero
+                            )
                         ) {
+
                             Text("<", fontSize = 40.sp)
+
                         }
 
                         // Numero centrale (indice + totale)
@@ -114,7 +120,11 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
 
                         Button(
                             onClick = { if (currentIndex < certificates.size - 1) currentIndex++ },
-                            modifier = Modifier.weight(1f).height(60.dp)
+                            modifier = Modifier.weight(1f).height(60.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFFADD8E6), // celeste chiaro
+                            contentColor = Color.DarkGray           // testo nero
+                        )
                         ) {
                             Text(">", fontSize = 40.sp)
                         }
@@ -126,21 +136,37 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
                             onClick = { viewModel.deleteCertificate(it.isin) },
-                            modifier = Modifier.weight(1f).height(50.dp)
+                            modifier = Modifier.weight(1f).height(50.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFADD8E6), // celeste chiaro
+                                contentColor = Color.DarkGray           // testo nero
+                            )
                         ) { Text("Cancella questo ISIN", fontSize = 20.sp) }
                     }
 
                     Spacer(modifier = Modifier.height(40.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = {
-                            scope.launch {
-                               viewModel.fetchAndUpdatePrice(it.isin)
-                                recentlyUpdated[it.isin] = true
-                                delay(2000)
-                               recentlyUpdated[it.isin] = false
-                            }
-                        }, modifier = Modifier.weight(1f).height(50.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    viewModel.fetchAndUpdatePrice(it.isin)
+                                    recentlyUpdated[it.isin] = true
+                                    delay(2000)
+                                    recentlyUpdated[it.isin] = false
+                                }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(50.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFADD8E6), // celeste chiaro
+                                contentColor = Color.Black           // testo nero
+                            )
+                        ) {
                             Text(
                                 "Aggiorna prezzo",
                                 fontSize = 20.sp
@@ -148,14 +174,33 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                         }
                     }
 
+
                     Spacer(modifier = Modifier.height(40.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = {
-                            selectedCert = it
-                            showEditScreen = true
-                        }, modifier = Modifier.weight(1f).height(50.dp)) { Text("Modifica questo ISIN", fontSize = 20.sp) }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                selectedCert = it
+                                showEditScreen = true
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(50.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFADD8E6), // celeste chiaro
+                                contentColor = Color.Black           // testo nero
+                            )
+                        ) {
+                            Text(
+                                "Modifica questo ISIN",
+                                fontSize = 20.sp
+                            )
+                        }
                     }
+
                 }
             } else {
                 Text("Nessun certificato inserito")
@@ -165,15 +210,30 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
 
             // 🔹 Bottone Aggiungi Nuovo
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Button(
                     onClick = {
                         selectedCert = null
                         showEditScreen = true
                     },
-                    modifier = Modifier.weight(1f).height(50.dp)
-                ) { Text("Aggiungi nuovo certificato", fontSize = 20.sp) }
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(50.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFADD8E6), // celeste chiaro
+                        contentColor = Color.Black           // testo nero
+                    )
+                ) {
+                    Text(
+                        "Aggiungi nuovo certificato",
+                        fontSize = 20.sp
+                    )
+                }
             }
+
         }
     }
 }
