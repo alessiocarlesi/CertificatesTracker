@@ -31,7 +31,11 @@ fun EditCertificateScreen(
 
     // 🔹 Campi grezzi per le date
     var rawNextBonus by remember { mutableStateOf(certificate?.nextbonus?.replace("/", "") ?: "") }
-    var rawValAutocall by remember { mutableStateOf(certificate?.valautocall?.replace("/", "") ?: "") }
+    var rawValAutocall by remember {
+        mutableStateOf(
+            certificate?.valautocall?.replace("/", "") ?: ""
+        )
+    }
 
     // 🔹 Campo quantità
     var quantity by remember { mutableStateOf(certificate?.quantity?.toString() ?: "") }
@@ -57,7 +61,7 @@ fun EditCertificateScreen(
                 singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(60.dp),
+                    .height(50.dp),
                 textStyle = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Normal)
             )
         }
@@ -68,14 +72,24 @@ fun EditCertificateScreen(
         field(strike, { strike = it }, "Strike")
         field(barrier, { barrier = it }, "Barrier")
         field(bonusLevel, { bonusLevel = it }, "Soglia Bonus")
+        field(premio, { premio = it }, "Bonus")
         field(bonusMonths, { bonusMonths = it }, "Frequenza cedole in mesi")
+        field(
+            rawNextBonus,
+            { input -> rawNextBonus = input.filter { it.isDigit() } },
+            "Next Bonus (DDMMYY)"
+        )
         field(autocallLevel, { autocallLevel = it }, "Soglia Autocall")
         field(autocallMonths, { autocallMonths = it }, "Frequenza valutazione Autocall in mesi")
-        field(premio, { premio = it }, "Bonus")
+
 
         // 🔹 Campi grezzi per le date
-        field(rawNextBonus, { input -> rawNextBonus = input.filter { it.isDigit() } }, "Next Bonus (DDMMYY)")
-        field(rawValAutocall, { input -> rawValAutocall = input.filter { it.isDigit() } }, "Valutazione Autocall (DDMMYY)")
+
+        field(
+            rawValAutocall,
+            { input -> rawValAutocall = input.filter { it.isDigit() } },
+            "Valutazione Autocall (DDMMYY)"
+        )
 
         // 🔹 Campo quantità
         field(quantity, { quantity = it.filter { ch -> ch.isDigit() } }, "Quantità")
@@ -83,13 +97,18 @@ fun EditCertificateScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         // 🔹 Bottoni Aggiungi/Aggiorna e Annulla
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             Button(
                 onClick = {
                     scope.launch {
                         // 🔹 Conversione finale delle date
-                        val nextBonusFinal = if (rawNextBonus.length == 6) formatDate(rawNextBonus) else rawNextBonus
-                        val valAutocallFinal = if (rawValAutocall.length == 6) formatDate(rawValAutocall) else rawValAutocall
+                        val nextBonusFinal =
+                            if (rawNextBonus.length == 6) formatDate(rawNextBonus) else rawNextBonus
+                        val valAutocallFinal =
+                            if (rawValAutocall.length == 6) formatDate(rawValAutocall) else rawValAutocall
                         val quantityInt = quantity.toIntOrNull() ?: 0
 
                         val newCertificate = Certificate(
