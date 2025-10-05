@@ -67,11 +67,11 @@ fun EditCertificateScreen(
         field(underlyingName, { underlyingName = it.uppercase() }, "Sottostante")
         field(strike, { strike = it }, "Strike")
         field(barrier, { barrier = it }, "Barrier")
-        field(bonusLevel, { bonusLevel = it }, "Bonus Level")
-        field(bonusMonths, { bonusMonths = it }, "Bonus Months")
-        field(autocallLevel, { autocallLevel = it }, "Autocall Level")
-        field(autocallMonths, { autocallMonths = it }, "Autocall Months")
-        field(premio, { premio = it }, "Premio")
+        field(bonusLevel, { bonusLevel = it }, "Soglia Bonus")
+        field(bonusMonths, { bonusMonths = it }, "Frequenza cedole in mesi")
+        field(autocallLevel, { autocallLevel = it }, "Soglia Autocall")
+        field(autocallMonths, { autocallMonths = it }, "Frequenza valutazione Autocall in mesi")
+        field(premio, { premio = it }, "Bonus")
 
         // 🔹 Campi grezzi per le date
         field(rawNextBonus, { input -> rawNextBonus = input.filter { it.isDigit() } }, "Next Bonus (DDMMYY)")
