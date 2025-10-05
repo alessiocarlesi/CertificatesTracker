@@ -16,6 +16,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.style.TextAlign
+import java.util.*
 
 @Composable
 fun CertificatesScreen(viewModel: CertificatesViewModel) {
@@ -49,6 +50,14 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                 .padding(16.dp)
         ) {
             val certificates = certificatesFlow.map { viewModel.updateDatesIfNeeded(it) }
+
+            // 🔹 Calcolo dei bonus mensili
+            LaunchedEffect(certificates) {
+                if (certificates.isNotEmpty()) {
+                    MonthlyBonusCalculator.calculate(certificates)
+                }
+            }
+
 
             if (certificates.isNotEmpty()) {
                 val cert = certificates.getOrNull(currentIndex)
@@ -106,7 +115,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
 
                         ) {
 
-                            Text("<", fontSize = 40.sp)
+                            Text("<", fontSize = 30.sp)
 
                         }
 
@@ -146,7 +155,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                         ) { Text("Cancella questo ISIN", fontSize = 20.sp) }
                     }
 
-                    Spacer(modifier = Modifier.height(40.dp))
+                    Spacer(modifier = Modifier.height(30.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -177,7 +186,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                     }
 
 
-                    Spacer(modifier = Modifier.height(40.dp))
+                    Spacer(modifier = Modifier.height(30.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -208,7 +217,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                 Text("Nessun certificato inserito")
             }
 
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(30.dp))
 
             // 🔹 Bottone Aggiungi Nuovo
 
@@ -236,9 +245,29 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                 }
             }
 
+            Spacer(modifier = Modifier.height(20.dp))
+// 🔹 Mostra bonus mensili
+            val monthlyBonuses = remember(certificatesFlow) {
+                MonthlyBonusCalculator.calculate(certificatesFlow)
+            }
+
+            Text(
+                text =   "BONUS \n"+
+                        "${monthlyBonuses.monthNames[0]}: ${monthlyBonuses.bonuses[0].format2(2)} €\n" +
+                        "${monthlyBonuses.monthNames[1]}: ${monthlyBonuses.bonuses[1].format2(2)} €\n" +
+                        "${monthlyBonuses.monthNames[2]}: ${monthlyBonuses.bonuses[2].format2(2)} €",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF444444),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+
         }
     }
 }
 
 // 🔹 Funzione di supporto per percentuali
 fun Double.format(digits: Int) = "%.${digits}f".format(this)
+fun Double.format2(digits: Int) = "%.${digits}f".format(this)
