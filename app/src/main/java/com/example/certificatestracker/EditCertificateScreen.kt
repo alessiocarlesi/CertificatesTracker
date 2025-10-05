@@ -48,7 +48,7 @@ fun EditCertificateScreen(
             .fillMaxSize()
             .verticalScroll(scrollState)
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
 
         // 🔹 Funzione di supporto per i campi
@@ -61,7 +61,7 @@ fun EditCertificateScreen(
                 singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp),
+                    .height(60.dp),
                 textStyle = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Normal)
             )
         }
