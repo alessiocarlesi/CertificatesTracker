@@ -28,6 +28,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
     // 🔹 Per EditCertificateScreen
     var showEditScreen by remember { mutableStateOf(false) }
     var selectedCert by remember { mutableStateOf<Certificate?>(null) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
 
     val recentlyUpdated = remember { mutableStateMapOf<String, Boolean>() }
     val scope = rememberCoroutineScope()
@@ -62,12 +63,17 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
             if (certificates.isNotEmpty()) {
                 val cert = certificates.getOrNull(currentIndex)
                 cert?.let {
-                    val textColor = if (recentlyUpdated[it.isin] == true) Color(0xFF008000) else Color.Black
+                    val textColor =
+                        if (recentlyUpdated[it.isin] == true) Color(0xFF008000) else Color.Black
 
-                    val strikePerc = if (it.strike != 0.0) ((it.lastPrice - it.strike) / it.strike * 100) else 0.0
-                    val barrierPerc = if (it.barrier != 0.0) ((it.lastPrice - it.barrier) / it.barrier * 100) else 0.0
-                    val bonusPerc = if (it.bonusLevel != 0.0) ((it.lastPrice - it.bonusLevel) / it.bonusLevel * 100) else 0.0
-                    val autocallPerc = if (it.autocallLevel != 0.0) ((it.lastPrice - it.autocallLevel) / it.autocallLevel * 100) else 0.0
+                    val strikePerc =
+                        if (it.strike != 0.0) ((it.lastPrice - it.strike) / it.strike * 100) else 0.0
+                    val barrierPerc =
+                        if (it.barrier != 0.0) ((it.lastPrice - it.barrier) / it.barrier * 100) else 0.0
+                    val bonusPerc =
+                        if (it.bonusLevel != 0.0) ((it.lastPrice - it.bonusLevel) / it.bonusLevel * 100) else 0.0
+                    val autocallPerc =
+                        if (it.autocallLevel != 0.0) ((it.lastPrice - it.autocallLevel) / it.autocallLevel * 100) else 0.0
 
                     Text(
                         text = "ISIN: ${it.isin} (${it.lastUpdate ?: "-"})\n" +
@@ -75,7 +81,11 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                                 "Quantità: ${it.quantity}\n" +
                                 "Strike: ${it.strike} (${strikePerc.format(1)}%)\n" +
                                 "Barrier: ${it.barrier} (${barrierPerc.format(1)}%)\n" +
-                                "Bonus: ${it.bonusLevel} (${bonusPerc.format(1)}%) - ${(it.premio * it.quantity).format(2)} € - il: ${it.nextbonus}\n" +
+                                "Bonus: ${it.bonusLevel} (${bonusPerc.format(1)}%) - ${
+                                    (it.premio * it.quantity).format(
+                                        2
+                                    )
+                                } € - il: ${it.nextbonus}\n" +
                                 "Autocall: ${it.autocallLevel} (${autocallPerc.format(1)}%) - Valutazione: ${it.valautocall}",
                         color = textColor,
                         fontSize = 14.sp,
@@ -87,12 +97,17 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
 
                     // 🔹 API usage
                     apiUsages.forEach { usage ->
-                        val provider = ApiProvider.values().firstOrNull { it.displayName == usage.providerName } ?: return@forEach
+                        val provider = ApiProvider.values()
+                            .firstOrNull { it.displayName == usage.providerName } ?: return@forEach
                         val dailyPercent = usage.dailyCount * 100.0 / provider.dailyLimit
                         val monthlyPercent = usage.monthlyCount * 100.0 / provider.monthlyLimit
 
                         Text(
-                            text = "${provider.displayName}: Giornaliero ${dailyPercent.format(1)}%, Mensile ${monthlyPercent.format(1)}%",
+                            text = "${provider.displayName}: Giornaliero ${dailyPercent.format(1)}%, Mensile ${
+                                monthlyPercent.format(
+                                    1
+                                )
+                            }%",
                             fontSize = 12.sp,
                             color = Color.DarkGray
                         )
@@ -109,7 +124,9 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                             onClick = { if (currentIndex > 0) currentIndex-- },
                             modifier = Modifier.weight(1f).height(60.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (currentIndex == 0) Color.LightGray else Color(0xFFADD8E6), // grigio chiaro se primo record
+                                containerColor = if (currentIndex == 0) Color.LightGray else Color(
+                                    0xFFADD8E6
+                                ), // grigio chiaro se primo record
                                 contentColor = Color.DarkGray // testo nero
                             )
 
@@ -132,7 +149,9 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                             onClick = { if (currentIndex < certificates.size - 1) currentIndex++ },
                             modifier = Modifier.weight(1f).height(60.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (currentIndex == certificates.size - 1) Color.LightGray else Color(0xFFADD8E6), // grigio se ultimo
+                                containerColor = if (currentIndex == certificates.size - 1) Color.LightGray else Color(
+                                    0xFFADD8E6
+                                ), // grigio se ultimo
                                 contentColor = Color.DarkGray // testo nero
                             )
 
@@ -144,9 +163,16 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                     Spacer(modifier = Modifier.height(40.dp))
 
                     // 🔹 Bottoni Azioni
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         Button(
-                            onClick = { viewModel.deleteCertificate(it.isin) },
+                            onClick = {
+                                selectedCert = it
+                                showDeleteDialog = true
+                            },
+
                             modifier = Modifier.weight(1f).height(50.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Color(0xFFADD8E6), // celeste chiaro
@@ -252,7 +278,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
             }
 
             Text(
-                text =   "BONUS \n"+
+                text = "BONUS \n" +
                         "${monthlyBonuses.monthNames[0]}: ${monthlyBonuses.bonuses[0].format2(2)} €\n" +
                         "${monthlyBonuses.monthNames[1]}: ${monthlyBonuses.bonuses[1].format2(2)} €\n" +
                         "${monthlyBonuses.monthNames[2]}: ${monthlyBonuses.bonuses[2].format2(2)} €",
@@ -265,6 +291,30 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
 
 
         }
+    }
+    if (showDeleteDialog && selectedCert != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Conferma eliminazione") },
+            text = { Text("Vuoi davvero cancellare l’ISIN ${selectedCert!!.isin}?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteCertificate(selectedCert!!.isin)
+                    showDeleteDialog = false
+                    selectedCert = null
+                }) {
+                    Text("Sì, elimina", color = Color.Red)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showDeleteDialog = false
+                    selectedCert = null
+                }) {
+                    Text("Annulla")
+                }
+            }
+        )
     }
 }
 
