@@ -21,11 +21,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         // 🔹 Ottieni il database in modo sicuro (restore se corrotto)
-        val safeDb = DatabaseBackupHelper.getSafeDatabase(applicationContext)
+        val safeDb = CertificatesDatabase.getDatabase(applicationContext)
 
         // 🔹 Ottieni DAO dal database sicuro
         dao = safeDb.certificatesDao()
-        apiUsageDao = ApiUsageDatabase.getDatabase(applicationContext).apiUsageDao() // rimane separato se non vuoi backup su questo DB
+        apiUsageDao = ApiUsageDatabase.getDatabase(applicationContext).apiUsageDao() // separato dal backup principale
 
         // 🔹 Crea ViewModel con entrambi i DAO
         certificatesViewModel = ViewModelProvider(
@@ -33,10 +33,10 @@ class MainActivity : ComponentActivity() {
             CertificatesViewModelFactory(dao, apiUsageDao)
         )[CertificatesViewModel::class.java]
 
+        // 🔹 Composable UI
         setContent {
             MaterialTheme {
                 Surface {
-
                     CertificatesScreen(certificatesViewModel)
                 }
             }

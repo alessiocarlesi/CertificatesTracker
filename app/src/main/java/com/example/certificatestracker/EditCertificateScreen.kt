@@ -29,12 +29,15 @@ fun EditCertificateScreen(
     var autocallMonths by remember { mutableStateOf(certificate?.autocallMonths?.toString() ?: "") }
     var premio by remember { mutableStateOf(certificate?.premio?.toString() ?: "") }
 
+    // 🔹 Nuovo campo: prezzo di acquisto
+    var purchasePrice by remember { mutableStateOf(certificate?.purchasePrice?.toString() ?: "") }
+
     // 🔹 Campi grezzi per le date
-    var rawNextBonus by remember { mutableStateOf(certificate?.nextbonus?.replace("/", "") ?: "") }
+    var rawNextBonus by remember {
+        mutableStateOf(normalizeToShortRawDateForEdit(certificate?.nextbonus ?: ""))
+    }
     var rawValAutocall by remember {
-        mutableStateOf(
-            certificate?.valautocall?.replace("/", "") ?: ""
-        )
+        mutableStateOf(normalizeToShortRawDateForEdit(certificate?.valautocall ?: ""))
     }
 
     // 🔹 Campo quantità
@@ -81,18 +84,17 @@ fun EditCertificateScreen(
         )
         field(autocallLevel, { autocallLevel = it }, "Soglia Autocall")
         field(autocallMonths, { autocallMonths = it }, "Frequenza valutazione Autocall in mesi")
-
-
-        // 🔹 Campi grezzi per le date
-
         field(
             rawValAutocall,
             { input -> rawValAutocall = input.filter { it.isDigit() } },
             "Valutazione Autocall (DDMMYY)"
         )
-
-        // 🔹 Campo quantità
         field(quantity, { quantity = it.filter { ch -> ch.isDigit() } }, "Quantità")
+        field(
+            purchasePrice,
+            { input -> purchasePrice = input.filter { it.isDigit() || it == '.' } },
+            "Prezzo di acquisto"
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -104,12 +106,10 @@ fun EditCertificateScreen(
             Button(
                 onClick = {
                     scope.launch {
-                        // 🔹 Conversione finale delle date
-                        val nextBonusFinal =
-                            if (rawNextBonus.length == 6) formatDate(rawNextBonus) else rawNextBonus
-                        val valAutocallFinal =
-                            if (rawValAutocall.length == 6) formatDate(rawValAutocall) else rawValAutocall
+                        val nextBonusFinal = rawToDisplayDate(rawNextBonus)
+                        val valAutocallFinal = rawToDisplayDate(rawValAutocall)
                         val quantityInt = quantity.toIntOrNull() ?: 0
+                        val purchasePriceDouble = purchasePrice.toDoubleOrNull()
 
                         val newCertificate = Certificate(
                             isin = isin,
@@ -125,7 +125,8 @@ fun EditCertificateScreen(
                             valautocall = valAutocallFinal,
                             lastPrice = certificate?.lastPrice ?: 0.0,
                             lastUpdate = certificate?.lastUpdate,
-                            quantity = quantityInt
+                            quantity = quantityInt,
+                            purchasePrice = purchasePriceDouble
                         )
 
                         if (certificate == null) {

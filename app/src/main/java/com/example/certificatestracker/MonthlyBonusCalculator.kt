@@ -1,6 +1,6 @@
+// filename: MonthlyBonusCalculator.kt
 package com.example.certificatestracker
 
-import android.util.Log
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -9,52 +9,68 @@ data class MonthlyBonuses(
     val bonuses: List<Double>
 )
 
-class MonthlyBonusCalculator {
+object MonthlyBonusCalculator {
 
-    companion object {
-        fun calculate(certificates: List<Certificate>): MonthlyBonuses {
-            val now = Calendar.getInstance()
+    fun calculate(certificates: List<Certificate>): MonthlyBonuses {
+        val calendar = Calendar.getInstance()
+        val monthFormat = SimpleDateFormat("MMMM", Locale.getDefault())
+        val monthNames = mutableListOf<String>()
 
-            val monthNames = (0..2).map { offset ->
-                val cal = now.clone() as Calendar
-                cal.add(Calendar.MONTH, offset)
-                cal.getDisplayName(Calendar.MONTH, Calendar.LONG, Locale.getDefault()) ?: "N/A"
-            }
+        // ✅ Solo 3 mesi: corrente + 2 successivi
+        for (i in 0 until 3) {
+            val monthName = monthFormat.format(calendar.time)
+            monthNames.add(monthName.replaceFirstChar { it.uppercase() })
+            calendar.add(Calendar.MONTH, 1)
+        }
 
-            val bonuses = MutableList(3) { 0.0 }
+        val bonuses = MutableList(3) { 0.0 }
 
-            val formatter = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+        certificates.forEach { cert ->
+            val prezzoSottostante = cert.lastPrice
+            val sogliaBonus = cert.bonusLevel
+            val sogliaAutocall = cert.autocallLevel
+            val quantita = cert.quantity
+            val purchasePrice = cert.purchasePrice ?: 0.0
+            val premio = cert.premio
 
-            for (cert in certificates) {
-                if (cert.nextbonus.isBlank()) continue
-
-                val nextBonusDate = try {
-                    formatter.parse(cert.nextbonus)
+            // 🔹 Estrai il mese di valutazione autocall
+            val autocallMonthName = cert.valautocall?.let { dateString ->
+                try {
+                    val date = SimpleDateFormat("dd/MM/yy", Locale.getDefault()).parse(dateString)
+                    SimpleDateFormat("MMMM", Locale.getDefault())
+                        .format(date!!)
+                        .replaceFirstChar { it.uppercase() }
                 } catch (e: Exception) {
-                    Log.e("MonthlyBonusCalculator", "Errore parsing data: ${cert.nextbonus}", e)
                     null
-                } ?: continue
-
-                val calBonus = Calendar.getInstance()
-                calBonus.time = nextBonusDate
-
-                for (i in 0..2) {
-                    val calTarget = now.clone() as Calendar
-                    calTarget.add(Calendar.MONTH, i)
-                    if (calBonus.get(Calendar.MONTH) == calTarget.get(Calendar.MONTH) &&
-                        calBonus.get(Calendar.YEAR) == calTarget.get(Calendar.YEAR)
-                        && cert.lastPrice >= cert.barrier
-                    ) {
-                        bonuses[i] += cert.premio * cert.quantity
-                    }
                 }
             }
 
-            for (i in 0..2) {
-                Log.d("MonthlyBonusCalculator", "Bonus ${monthNames[i]}: ${bonuses[i]}")
-            }
+            // ✅ Variabile che indica se il certificato è già estinto da autocall
+            var autocallTriggered = false
 
-            return MonthlyBonuses(monthNames, bonuses)
+            for (monthIndex in 0 until 3) {
+                val currentMonthName = monthNames[monthIndex]
+
+                // Se autocall già scattata in un mese precedente → skip
+                if (autocallTriggered) continue
+
+                if (autocallMonthName == currentMonthName) {
+                    // 🔸 Mese di valutazione autocall
+                    if (prezzoSottostante >= sogliaAutocall) {
+                        bonuses[monthIndex] += (premio * quantita) + (100.0 - purchasePrice) * quantita
+                        autocallTriggered = true  // certificato estinto da questo mese in poi
+                    } else if (prezzoSottostante >= sogliaBonus) {
+                        bonuses[monthIndex] += premio * quantita
+                    }
+                } else {
+                    // 🔸 Altri mesi → solo bonus (se autocall non ancora scattata)
+                    if (prezzoSottostante >= sogliaBonus) {
+                        bonuses[monthIndex] += premio * quantita
+                    }
+                }
+            }
         }
+
+        return MonthlyBonuses(monthNames, bonuses)
     }
 }

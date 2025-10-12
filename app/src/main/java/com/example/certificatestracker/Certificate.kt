@@ -18,5 +18,9 @@ data class Certificate(
     val valautocall: String = "",
     val lastPrice: Double = 0.0,
     val lastUpdate: String? = null,
-    val quantity: Int = 0 // ✅ nuovo campo
+    val quantity: Int = 0 ,// ✅ nuovo campo
+    // Nuovo campo
+    val purchasePrice: Double? = null,
+
+
 )

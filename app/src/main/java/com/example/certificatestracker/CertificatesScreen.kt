@@ -16,7 +16,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.style.TextAlign
-import java.util.*
 
 @Composable
 fun CertificatesScreen(viewModel: CertificatesViewModel) {
@@ -24,8 +23,6 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
     val apiUsages by viewModel.apiUsages.collectAsState(initial = emptyList())
 
     var currentIndex by remember { mutableStateOf(0) }
-
-    // 🔹 Per EditCertificateScreen
     var showEditScreen by remember { mutableStateOf(false) }
     var selectedCert by remember { mutableStateOf<Certificate?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -39,7 +36,6 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
             certificate = selectedCert,
             viewModel = viewModel
         ) {
-            // callback al termine della modifica
             showEditScreen = false
             selectedCert = null
         }
@@ -52,69 +48,56 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
         ) {
             val certificates = certificatesFlow.map { viewModel.updateDatesIfNeeded(it) }
 
-            // 🔹 Calcolo dei bonus mensili
             LaunchedEffect(certificates) {
                 if (certificates.isNotEmpty()) {
                     MonthlyBonusCalculator.calculate(certificates)
                 }
             }
 
-
             if (certificates.isNotEmpty()) {
                 val cert = certificates.getOrNull(currentIndex)
                 cert?.let {
-                    val textColor =
-                        if (recentlyUpdated[it.isin] == true) Color(0xFF008000) else Color.Black
+                    val textColor = if (recentlyUpdated[it.isin] == true) Color(0xFF008000) else Color.Black
 
-                    val strikePerc =
-                        if (it.strike != 0.0) ((it.lastPrice - it.strike) / it.strike * 100) else 0.0
-                    val barrierPerc =
-                        if (it.barrier != 0.0) ((it.lastPrice - it.barrier) / it.barrier * 100) else 0.0
-                    val bonusPerc =
-                        if (it.bonusLevel != 0.0) ((it.lastPrice - it.bonusLevel) / it.bonusLevel * 100) else 0.0
-                    val autocallPerc =
-                        if (it.autocallLevel != 0.0) ((it.lastPrice - it.autocallLevel) / it.autocallLevel * 100) else 0.0
+                    val strikePerc = if (it.strike != 0.0) ((it.lastPrice - it.strike) / it.strike * 100) else 0.0
+                    val barrierPerc = if (it.barrier != 0.0) ((it.lastPrice - it.barrier) / it.barrier * 100) else 0.0
+                    val bonusPerc = if (it.bonusLevel != 0.0) ((it.lastPrice - it.bonusLevel) / it.bonusLevel * 100) else 0.0
+                    val autocallPerc = if (it.autocallLevel != 0.0) ((it.lastPrice - it.autocallLevel) / it.autocallLevel * 100) else 0.0
 
                     Text(
-                        text = "ISIN: ${it.isin} (${it.lastUpdate ?: "-"})\n" +
-                                "Sottostante: ${it.underlyingName} - Prezzo: ${it.lastPrice} EUR\n" +
-                                "Quantità: ${it.quantity}\n" +
-                                "Strike: ${it.strike} (${strikePerc.format(1)}%)\n" +
-                                "Barrier: ${it.barrier} (${barrierPerc.format(1)}%)\n" +
-                                "Bonus: ${it.bonusLevel} (${bonusPerc.format(1)}%) - ${
-                                    (it.premio * it.quantity).format(
-                                        2
-                                    )
-                                } € - il: ${it.nextbonus}\n" +
-                                "Autocall: ${it.autocallLevel} (${autocallPerc.format(1)}%) - Valutazione: ${it.valautocall}",
+                        text = buildString {
+                            append("ISIN: ${it.isin} (${it.lastUpdate ?: "-"})\n")
+                            append("Sottostante: ${it.underlyingName} - Prezzo: ${it.lastPrice} EUR\n")
+                            append("Quantità: ${it.quantity}")
+                            if (it.purchasePrice != null) {
+                                append("  Costo: €${it.purchasePrice}")
+                            }
+                            append("\nStrike: ${it.strike} (${strikePerc.format(1)}%)\n")
+                            append("Barrier: ${it.barrier} (${barrierPerc.format(1)}%)\n")
+                            append("Bonus: ${it.bonusLevel} (${bonusPerc.format(1)}%) - ${(it.premio * it.quantity).format2(2)} € - il: ${it.nextbonus}\n")
+                            append("Autocall: ${it.autocallLevel} (${autocallPerc.format(1)}%) - Valutazione: ${it.valautocall}")
+                        },
                         color = textColor,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
                     )
 
-
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // 🔹 API usage
                     apiUsages.forEach { usage ->
-                        val provider = ApiProvider.values()
-                            .firstOrNull { it.displayName == usage.providerName } ?: return@forEach
+                        val provider = ApiProvider.values().firstOrNull { it.displayName == usage.providerName } ?: return@forEach
                         val dailyPercent = usage.dailyCount * 100.0 / provider.dailyLimit
                         val monthlyPercent = usage.monthlyCount * 100.0 / provider.monthlyLimit
 
                         Text(
-                            text = "${provider.displayName}: Giornaliero ${dailyPercent.format(1)}%, Mensile ${
-                                monthlyPercent.format(
-                                    1
-                                )
-                            }%",
+                            text = "${provider.displayName}: Giornaliero ${dailyPercent.format(1)}%, Mensile ${monthlyPercent.format(1)}%",
                             fontSize = 12.sp,
                             color = Color.DarkGray
                         )
                     }
 
                     Spacer(modifier = Modifier.height(30.dp))
-// 🔹 Navigazione tra certificati
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -124,19 +107,11 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                             onClick = { if (currentIndex > 0) currentIndex-- },
                             modifier = Modifier.weight(1f).height(60.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (currentIndex == 0) Color.LightGray else Color(
-                                    0xFFADD8E6
-                                ), // grigio chiaro se primo record
-                                contentColor = Color.DarkGray // testo nero
+                                containerColor = if (currentIndex == 0) Color.LightGray else Color(0xFFADD8E6),
+                                contentColor = Color.DarkGray
                             )
+                        ) { Text("<", fontSize = 30.sp) }
 
-                        ) {
-
-                            Text("<", fontSize = 30.sp)
-
-                        }
-
-                        // Numero centrale (indice + totale)
                         Text(
                             text = "${currentIndex + 1} / ${certificates.size}",
                             fontSize = 22.sp,
@@ -149,20 +124,14 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                             onClick = { if (currentIndex < certificates.size - 1) currentIndex++ },
                             modifier = Modifier.weight(1f).height(60.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (currentIndex == certificates.size - 1) Color.LightGray else Color(
-                                    0xFFADD8E6
-                                ), // grigio se ultimo
-                                contentColor = Color.DarkGray // testo nero
+                                containerColor = if (currentIndex == certificates.size - 1) Color.LightGray else Color(0xFFADD8E6),
+                                contentColor = Color.DarkGray
                             )
-
-                        ) {
-                            Text(">", fontSize = 40.sp)
-                        }
+                        ) { Text(">", fontSize = 40.sp) }
                     }
 
                     Spacer(modifier = Modifier.height(40.dp))
 
-                    // 🔹 Bottoni Azioni
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -172,11 +141,10 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                                 selectedCert = it
                                 showDeleteDialog = true
                             },
-
                             modifier = Modifier.weight(1f).height(50.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFADD8E6), // celeste chiaro
-                                contentColor = Color.DarkGray           // testo nero
+                                containerColor = Color(0xFFADD8E6),
+                                contentColor = Color.DarkGray
                             )
                         ) { Text("Cancella questo ISIN", fontSize = 20.sp) }
                     }
@@ -196,21 +164,13 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                                     recentlyUpdated[it.isin] = false
                                 }
                             },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(50.dp),
+                            modifier = Modifier.weight(1f).height(50.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFADD8E6), // celeste chiaro
-                                contentColor = Color.Black           // testo nero
+                                containerColor = Color(0xFFADD8E6),
+                                contentColor = Color.Black
                             )
-                        ) {
-                            Text(
-                                "Aggiorna prezzo",
-                                fontSize = 20.sp
-                            )
-                        }
+                        ) { Text("Aggiorna prezzo", fontSize = 20.sp) }
                     }
-
 
                     Spacer(modifier = Modifier.height(30.dp))
 
@@ -219,23 +179,13 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Button(
-                            onClick = {
-                                selectedCert = it
-                                showEditScreen = true
-                            },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(50.dp),
+                            onClick = { selectedCert = it; showEditScreen = true },
+                            modifier = Modifier.weight(1f).height(50.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFADD8E6), // celeste chiaro
-                                contentColor = Color.Black           // testo nero
+                                containerColor = Color(0xFFADD8E6),
+                                contentColor = Color.Black
                             )
-                        ) {
-                            Text(
-                                "Modifica questo ISIN",
-                                fontSize = 20.sp
-                            )
-                        }
+                        ) { Text("Modifica questo ISIN", fontSize = 20.sp) }
                     }
 
                 }
@@ -246,52 +196,43 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
             Spacer(modifier = Modifier.height(30.dp))
 
             // 🔹 Bottone Aggiungi Nuovo
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Button(
-                    onClick = {
-                        selectedCert = null
-                        showEditScreen = true
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(50.dp),
+                    onClick = { selectedCert = null; showEditScreen = true },
+                    modifier = Modifier.weight(1f).height(50.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFADD8E6), // celeste chiaro
-                        contentColor = Color.Black           // testo nero
+                        containerColor = Color(0xFFADD8E6),
+                        contentColor = Color.Black
                     )
-                ) {
-                    Text(
-                        "Aggiungi nuovo certificato",
-                        fontSize = 20.sp
-                    )
-                }
+                ) { Text("Aggiungi nuovo certificato", fontSize = 20.sp) }
             }
 
             Spacer(modifier = Modifier.height(20.dp))
-// 🔹 Mostra bonus mensili
+
+            // 🔹 Mostra bonus mensili (aggiornato con purchasePrice e autocall)
             val monthlyBonuses = remember(certificatesFlow) {
                 MonthlyBonusCalculator.calculate(certificatesFlow)
             }
 
             Text(
-                text = "BONUS \n" +
-                        "${monthlyBonuses.monthNames[0]}: ${monthlyBonuses.bonuses[0].format2(2)} €\n" +
-                        "${monthlyBonuses.monthNames[1]}: ${monthlyBonuses.bonuses[1].format2(2)} €\n" +
-                        "${monthlyBonuses.monthNames[2]}: ${monthlyBonuses.bonuses[2].format2(2)} €",
+                text = buildString {
+                    append("BONUS\n")
+                    for (i in monthlyBonuses.monthNames.indices) {
+                        append("${monthlyBonuses.monthNames[i]}: ${monthlyBonuses.bonuses[i].format2(2)} €\n")
+                    }
+                },
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF444444),
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
-
-
         }
     }
+
     if (showDeleteDialog && selectedCert != null) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
@@ -302,22 +243,18 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                     viewModel.deleteCertificate(selectedCert!!.isin)
                     showDeleteDialog = false
                     selectedCert = null
-                }) {
-                    Text("Sì, elimina", color = Color.Red)
-                }
+                }) { Text("Sì, elimina", color = Color.Red) }
             },
             dismissButton = {
                 TextButton(onClick = {
                     showDeleteDialog = false
                     selectedCert = null
-                }) {
-                    Text("Annulla")
-                }
+                }) { Text("Annulla") }
             }
         )
     }
 }
 
-// 🔹 Funzione di supporto per percentuali
+// 🔹 Funzioni di supporto
 fun Double.format(digits: Int) = "%.${digits}f".format(this)
 fun Double.format2(digits: Int) = "%.${digits}f".format(this)
