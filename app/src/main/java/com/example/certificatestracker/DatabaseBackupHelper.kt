@@ -2,6 +2,8 @@
 package com.example.certificatestracker
 
 import android.content.Context
+import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -13,49 +15,113 @@ object DatabaseBackupHelper {
     private const val DATABASE_NAME = "certificates_db"
     private const val BACKUP_FOLDER = "backups"
     private const val DATE_FORMAT = "yyyyMMdd_HHmmss"
+    private const val MAX_BACKUPS = 3
 
+    /**
+     * Crea un backup .db apribile, mantenendo solo gli ultimi 3.
+     */
     fun backupDatabase(context: Context) {
+        val dbFile = context.getDatabasePath(DATABASE_NAME)
+        if (!dbFile.exists()) {
+            println("⚠️ Nessun database trovato per il backup.")
+            return
+        }
+
+        val backupDir = File(context.filesDir, BACKUP_FOLDER)
+        if (!backupDir.exists()) backupDir.mkdirs()
+
+        // ✅ Esegui il checkpoint WAL per consolidare tutto nel .db
         try {
-            val dbFile = context.getDatabasePath(DATABASE_NAME)
-            if (!dbFile.exists()) return
+            context.openOrCreateDatabase(DATABASE_NAME, Context.MODE_PRIVATE, null)
+                .execSQL("PRAGMA wal_checkpoint(FULL);")
+            println("✅ Checkpoint WAL completato.")
+        } catch (e: Exception) {
+            e.printStackTrace()
+            println("⚠️ Checkpoint WAL fallito: il backup potrebbe non essere perfetto.")
+        }
 
-            val backupDir = File(context.filesDir, BACKUP_FOLDER)
-            if (!backupDir.exists()) backupDir.mkdir()
+        // ✅ Copia il file principale .db
+        val timestamp = SimpleDateFormat(DATE_FORMAT, Locale.US).format(Date())
+        val backupFile = File(backupDir, "backup_$timestamp.db")
 
-            val timestamp = SimpleDateFormat(DATE_FORMAT, Locale.US).format(Date())
-            val backupFile = File(backupDir, "backup_$timestamp.db")
-
+        try {
             FileInputStream(dbFile).use { input ->
                 FileOutputStream(backupFile).use { output ->
                     input.copyTo(output)
                 }
             }
-            println("✅ Backup creato: ${backupFile.absolutePath}")
+            println("✅ Backup creato: ${backupFile.name} (${backupFile.length()} bytes)")
         } catch (e: Exception) {
             e.printStackTrace()
+            println("❌ Errore durante la copia del file di backup.")
+            return
+        }
+
+        // ✅ Mantieni solo gli ultimi 3 backup
+        val backups = backupDir.listFiles { f ->
+            f.isFile && f.name.startsWith("backup_") && f.name.endsWith(".db")
+        }?.sortedByDescending { it.lastModified() } ?: emptyList()
+
+        if (backups.size > MAX_BACKUPS) {
+            backups.drop(MAX_BACKUPS).forEach { old ->
+                if (old.delete()) println("🧽 Eliminato backup vecchio: ${old.name}")
+            }
         }
     }
 
+    /**
+     * Ripristina l’ultimo backup disponibile.
+     */
     fun restoreDatabase(context: Context) {
+        val backupDir = File(context.filesDir, BACKUP_FOLDER)
+        if (!backupDir.exists()) {
+            println("⚠️ Nessuna cartella backup trovata.")
+            return
+        }
+
+        val backups = backupDir.listFiles { f ->
+            f.isFile && f.name.endsWith(".db")
+        }?.sortedByDescending { it.lastModified() }
+
+        val latest = backups?.firstOrNull()
+        if (latest == null) {
+            println("⚠️ Nessun backup disponibile per il ripristino.")
+            return
+        }
+
+        val dbFile = context.getDatabasePath(DATABASE_NAME)
         try {
-            val backupDir = File(context.filesDir, BACKUP_FOLDER)
-            if (!backupDir.exists()) return
-
-            val backups = backupDir.listFiles { file ->
-                file.isFile && file.name.endsWith(".db")
-            }?.sortedByDescending { it.lastModified() }
-
-            val latestBackup = backups?.firstOrNull() ?: return
-
-            val dbFile = context.getDatabasePath(DATABASE_NAME)
-            FileInputStream(latestBackup).use { input ->
+            FileInputStream(latest).use { input ->
                 FileOutputStream(dbFile).use { output ->
                     input.copyTo(output)
                 }
             }
-            println("✅ Database ripristinato dal backup: ${latestBackup.name}")
+            println("✅ Database ripristinato da ${latest.name}")
         } catch (e: Exception) {
             e.printStackTrace()
+            println("❌ Errore durante il ripristino del backup.")
+        }
+    }
+
+    /**
+     * Opzionale: wrapper per usare il restore automatico con Room.
+     */
+    fun <T : RoomDatabase> getSafeDatabase(
+        context: Context,
+        dbClass: Class<T>,
+        migrations: Array<Migration>
+    ): T {
+        return try {
+            androidx.room.Room.databaseBuilder(context.applicationContext, dbClass, DATABASE_NAME)
+                .addMigrations(*migrations)
+                .build()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            println("⚠️ Errore apertura DB: tentativo di restore da backup...")
+            restoreDatabase(context)
+            androidx.room.Room.databaseBuilder(context.applicationContext, dbClass, DATABASE_NAME)
+                .addMigrations(*migrations)
+                .build()
         }
     }
 }
