@@ -25,7 +25,7 @@ class CertificatesViewModel(
     val apiUsages: StateFlow<List<ApiUsage>> =
         apiUsageDao.getAllFlow().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-    // Aggiungi/Inserisci certificato (usa Room REPLACE)
+    // Aggiungi/Inserisci certificato
     fun addCertificate(certificate: Certificate) {
         viewModelScope.launch {
             dao.insert(certificate)
@@ -49,14 +49,14 @@ class CertificatesViewModel(
         }
     }
 
-    // Aggiorna prezzo e timestamp chiamando i provider in ordine (TwelveData -> Marketstack -> AlphaVantage)
+    // Aggiorna prezzo e timestamp chiamando i provider in ordine
     fun fetchAndUpdatePrice(isin: String) {
         viewModelScope.launch {
             val cert = certificates.value.find { it.isin == isin } ?: return@launch
             val symbol = cert.underlyingName
             val now = formatter.format(Date())
 
-            // TwelveData
+            // 🔹 TwelveData
             try {
                 Log.d("ViewModel", "Fetching price from TwelveData for $symbol")
                 val resultTwelve = TwelveDataFetcher.fetchLatestClose(symbol, ApiKeys.TWELVEDATA)
@@ -71,7 +71,7 @@ class CertificatesViewModel(
                 Log.e("ViewModel", "TwelveData exception for $symbol", t)
             }
 
-            // Marketstack
+            // 🔹 Marketstack
             try {
                 Log.d("ViewModel", "Fetching price from Marketstack for $symbol")
                 val resultMarket = MarketstackFetcher.fetchLatestClose(symbol, ApiKeys.MARKETSTACK)
@@ -86,7 +86,7 @@ class CertificatesViewModel(
                 Log.e("ViewModel", "Marketstack exception for $symbol", t)
             }
 
-            // AlphaVantage
+            // 🔹 AlphaVantage
             try {
                 Log.d("ViewModel", "Fetching price from AlphaVantage for $symbol")
                 val resultAlpha = AlphaVantageFetcher.fetchLatestClose(symbol, ApiKeys.ALPHAVANTAGE)
@@ -101,15 +101,14 @@ class CertificatesViewModel(
                 Log.e("ViewModel", "AlphaVantage exception for $symbol", t)
             }
 
-            // Se arriviamo qui, nessun provider ha risposto con successo
             Log.w("ViewModel", "No price available for $symbol from configured providers")
         }
     }
 
-    // Aggiorna prezzo direttamente in DB (usata quando abbiamo già il prezzo)
+    // Aggiorna prezzo direttamente in DB
     private fun updateCertificatePrice(isin: String, price: Double, timestamp: String) {
         viewModelScope.launch {
-            val safePrice = price ?: 0.0                   // fallback se price è null
+            val safePrice = price ?: 0.0
             val roundedPrice = (kotlin.math.round(safePrice * 100) / 100.0)
             dao.updatePriceAndTimestamp(isin, roundedPrice, timestamp)
             Log.d("ViewModel", "Updated price for $isin: $price at $timestamp")
@@ -136,10 +135,9 @@ class CertificatesViewModel(
         }
     }
 
-    // Parse helper (se serve)
     fun parseDouble(input: String) = input.replace(',', '.').toDoubleOrNull() ?: 0.0
 
-    // Aggiorna nextbonus e valautocall se necessario (mantiene il comportamento precedente)
+    // 🔸 Aggiorna nextbonus e valautocall solo se si è entrati nel mese successivo
     fun updateDatesIfNeeded(cert: Certificate): Certificate {
         var updatedNextbonus = cert.nextbonus
         var updatedValautocall = cert.valautocall
@@ -161,9 +159,21 @@ class CertificatesViewModel(
         if (monthsToAdd == 0) return null
         val parts = dateStr.split("/")
         if (parts.size != 3) return null
+
         val cal = Calendar.getInstance()
         cal.set(parts[2].toInt(), parts[1].toInt() - 1, parts[0].toInt())
+
         val today = Calendar.getInstance()
+
+        // ✅ Se la data è passata MA siamo ancora nello stesso mese → non aggiornare
+        if (cal.before(today) &&
+            cal.get(Calendar.MONTH) == today.get(Calendar.MONTH) &&
+            cal.get(Calendar.YEAR) == today.get(Calendar.YEAR)
+        ) {
+            return null
+        }
+
+        // ✅ Se la data è passata ed è iniziato un nuovo mese → aggiorna
         if (cal.before(today)) {
             cal.add(Calendar.MONTH, monthsToAdd)
             val day = cal.get(Calendar.DAY_OF_MONTH).toString().padStart(2, '0')
@@ -171,6 +181,7 @@ class CertificatesViewModel(
             val year = cal.get(Calendar.YEAR)
             return "$day/$month/$year"
         }
+
         return null
     }
 }
