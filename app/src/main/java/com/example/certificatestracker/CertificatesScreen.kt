@@ -50,7 +50,14 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
 
             LaunchedEffect(certificates) {
                 if (certificates.isNotEmpty()) {
-                    MonthlyBonusCalculator.calculate(certificates)
+                    // Esegue il calcolo (retrocompatibile con la tua UI)
+                    val bonusesData = MonthlyBonusCalculator.calculate(certificates)
+
+                    // Piccolo delay per essere sicuri che Room abbia finito di emettere i dati
+                    kotlinx.coroutines.delay(1000)
+
+                    // Stampa il riepilogo tabellare in Logcat (sempre)
+                    MonthlyBonusCalculator.printDebug(certificates)
                 }
             }
 
