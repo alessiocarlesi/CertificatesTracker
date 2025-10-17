@@ -57,7 +57,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                     kotlinx.coroutines.delay(1000)
 
                     // Stampa il riepilogo tabellare in Logcat (sempre)
-                    MonthlyBonusCalculator.printDebug(certificates)
+ //                   MonthlyBonusCalculator.printDebug(certificates)
                 }
             }
 
