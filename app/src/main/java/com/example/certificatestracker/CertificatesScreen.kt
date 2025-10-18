@@ -16,9 +16,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.style.TextAlign
+import androidx.navigation.NavController
 
 @Composable
-fun CertificatesScreen(viewModel: CertificatesViewModel) {
+fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavController) {
     val certificatesFlow by viewModel.certificates.collectAsState(initial = emptyList())
     val apiUsages by viewModel.apiUsages.collectAsState(initial = emptyList())
 
@@ -50,14 +51,8 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
 
             LaunchedEffect(certificates) {
                 if (certificates.isNotEmpty()) {
-                    // Esegue il calcolo (retrocompatibile con la tua UI)
                     val bonusesData = MonthlyBonusCalculator.calculate(certificates)
-
-                    // Piccolo delay per essere sicuri che Room abbia finito di emettere i dati
                     kotlinx.coroutines.delay(1000)
-
-                    // Stampa il riepilogo tabellare in Logcat (sempre)
- //                   MonthlyBonusCalculator.printDebug(certificates)
                 }
             }
 
@@ -194,7 +189,6 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
                             )
                         ) { Text("Modifica questo ISIN", fontSize = 20.sp) }
                     }
-
                 }
             } else {
                 Text("Nessun certificato inserito")
@@ -219,7 +213,24 @@ fun CertificatesScreen(viewModel: CertificatesViewModel) {
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // 🔹 Mostra bonus mensili (aggiornato con purchasePrice e autocall)
+            // 🔹 NUOVO: pulsante riepilogo bonus mensili
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = { navController.navigate("summary") },
+                    modifier = Modifier.weight(1f).height(50.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFADD8E6),
+                        contentColor = Color.Black
+                    )
+                ) { Text("📊 Vedi Riepilogo Bonus", fontSize = 20.sp) }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // 🔹 Mostra bonus mensili sintetici
             val monthlyBonuses = remember(certificatesFlow) {
                 MonthlyBonusCalculator.calculate(certificatesFlow)
             }

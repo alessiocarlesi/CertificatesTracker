@@ -33,11 +33,11 @@ class MainActivity : ComponentActivity() {
             CertificatesViewModelFactory(dao, apiUsageDao)
         )[CertificatesViewModel::class.java]
 
-        // 🔹 Composable UI
+        // 🔹 Composable UI con navigazione
         setContent {
             MaterialTheme {
                 Surface {
-                    CertificatesScreen(certificatesViewModel)
+                    AppNavigation(certificatesViewModel)
                 }
             }
         }

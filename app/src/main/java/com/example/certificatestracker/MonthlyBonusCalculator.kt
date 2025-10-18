@@ -12,24 +12,34 @@ data class MonthlyBonuses(
 
 object MonthlyBonusCalculator {
 
+    // 🔹 Funzione base, usata da CertificatesScreen (resta invariata)
     fun calculate(certificates: List<Certificate>): MonthlyBonuses {
+        val (months, _, totals) = calculateDetailed(certificates)
+        return MonthlyBonuses(months, totals)
+    }
+
+    // 🔹 Nuova funzione con dettagli per ISIN (usata dalla nuova schermata)
+    fun calculateDetailed(certificates: List<Certificate>):
+            Triple<List<String>, Map<String, List<Double>>, List<Double>> {
+
         val calendar = Calendar.getInstance()
         val monthFormat = SimpleDateFormat("MMMM", Locale.getDefault())
         val monthNames = mutableListOf<String>()
 
-        // ✅ Mesi: corrente + 2 successivi
+        // Mese corrente + 2 successivi
         for (i in 0 until 3) {
             val monthName = monthFormat.format(calendar.time)
             monthNames.add(monthName.replaceFirstChar { it.uppercase() })
             calendar.add(Calendar.MONTH, 1)
         }
 
-        val globalBonuses = MutableList(3) { 0.0 } // somma totale
-        val perIsinBonuses = mutableMapOf<String, MutableList<Double>>() // 🔹 per singolo ISIN
+        val globalBonuses = MutableList(3) { 0.0 }
+        val perIsinBonuses = mutableMapOf<String, MutableList<Double>>()
         val dateParser = SimpleDateFormat("dd/MM/yy", Locale.getDefault())
 
         certificates.forEach { cert ->
-            val certBonuses = MutableList(3) { 0.0 } // bonus specifici per questo ISIN
+            val certBonuses = MutableList(3) { 0.0 }
+
             val prezzoSottostante = cert.lastPrice
             val sogliaBonus = cert.bonusLevel
             val sogliaAutocall = cert.autocallLevel
@@ -49,7 +59,7 @@ object MonthlyBonusCalculator {
                 monthFormat.format(it).replaceFirstChar { c -> c.uppercase() }
             }
 
-            // 🔹 Mesi validi per bonus in base alla frequenza
+            // Mesi validi per bonus in base alla frequenza
             val validBonusMonths = mutableSetOf<String>()
             bonusDate?.let {
                 val tempCal = Calendar.getInstance().apply { time = it }
@@ -72,8 +82,8 @@ object MonthlyBonusCalculator {
                     val valore = (premio * quantita) + ((100.0 - purchasePrice) * quantita)
                     certBonuses[monthIndex] += valore
                     globalBonuses[monthIndex] += valore
-                    Log.d("BONUS_DEBUG", "🔸 AUTOCALL → ${cert.isin} | $currentMonthName | +${"%.2f".format(valore)} (premio+rimborso)")
                     autocallTriggered = true
+                    Log.d("BONUS_DEBUG", "🔸 AUTOCALL → ${cert.isin} | $currentMonthName | +${"%.2f".format(valore)}")
                     continue
                 }
 
@@ -82,47 +92,13 @@ object MonthlyBonusCalculator {
                     val aggiunta = premio * quantita
                     certBonuses[monthIndex] += aggiunta
                     globalBonuses[monthIndex] += aggiunta
-                    Log.d("BONUS_DEBUG", "💰 BONUS → ${cert.isin} | $currentMonthName | +${"%.2f".format(aggiunta)} | SogliaBonus=${"%.2f".format(sogliaBonus)} | Prezzo=${"%.2f".format(prezzoSottostante)}")
+                    Log.d("BONUS_DEBUG", "💰 BONUS → ${cert.isin} | $currentMonthName | +${"%.2f".format(aggiunta)}")
                 }
             }
 
-            // 🔸 salva risultati per l'ISIN
             perIsinBonuses[cert.isin] = certBonuses
-
-            // 🔸 riepilogo singolo
-            Log.d(
-                "BONUS_DEBUG",
-                "✅ Totali ${cert.isin}: " +
-                        "${monthNames[0]}=${"%.2f".format(certBonuses[0])} | " +
-                        "${monthNames[1]}=${"%.2f".format(certBonuses[1])} | " +
-                        "${monthNames[2]}=${"%.2f".format(certBonuses[2])}"
-            )
         }
 
-        // 🔹 riepilogo finale per ISIN
-        Log.d("BONUS_DEBUG", "===============================")
-        Log.d("BONUS_DEBUG", "📊 RIEPILOGO BONUS MENSILI (per ISIN)")
-        Log.d("BONUS_DEBUG", "-------------------------------")
-        Log.d("BONUS_DEBUG", "ISIN           | ${monthNames[0]} | ${monthNames[1]} | ${monthNames[2]}")
-        Log.d("BONUS_DEBUG", "-------------------------------")
-
-        perIsinBonuses.forEach { (isin, list) ->
-            Log.d(
-                "BONUS_DEBUG",
-                "${isin.padEnd(14)} | ${"%.2f".format(list[0]).padStart(6)} | " +
-                        "${"%.2f".format(list[1]).padStart(6)} | ${"%.2f".format(list[2]).padStart(6)}"
-            )
-        }
-
-        // 🔸 Totale portafoglio (somma di tutti i bonus)
-        Log.d("BONUS_DEBUG", "-------------------------------")
-        Log.d(
-            "BONUS_DEBUG",
-            "TOTALE PORTAFOGLIO | ${"%.2f".format(globalBonuses[0]).padStart(6)} | " +
-                    "${"%.2f".format(globalBonuses[1]).padStart(6)} | ${"%.2f".format(globalBonuses[2]).padStart(6)}"
-        )
-        Log.d("BONUS_DEBUG", "===============================")
-
-        return MonthlyBonuses(monthNames, globalBonuses)
+        return Triple(monthNames, perIsinBonuses, globalBonuses)
     }
 }
