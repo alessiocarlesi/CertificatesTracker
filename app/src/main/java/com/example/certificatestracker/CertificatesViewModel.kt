@@ -10,11 +10,23 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.compose.runtime.mutableStateListOf
+
 
 class CertificatesViewModel(
     private val dao: CertificatesDao,
     private val apiUsageDao: ApiUsageDao
 ) : ViewModel() {
+
+    // 🔹 Aggiungi in cima alla classe, fuori da fetchAndUpdatePrice():
+    private val _apiLogs = mutableStateListOf<String>()
+    val apiLogs: List<String> get() = _apiLogs
+
+    private fun logApi(message: String) {
+        val timestamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+        _apiLogs.add("[$timestamp] $message")
+        if (_apiLogs.size > 200) _apiLogs.removeFirst() // evita overflow
+    }
 
     private val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
 
@@ -49,59 +61,82 @@ class CertificatesViewModel(
         }
     }
 
+
+
+
     // Aggiorna prezzo e timestamp chiamando i provider in ordine
     fun fetchAndUpdatePrice(isin: String) {
         viewModelScope.launch {
             val cert = certificates.value.find { it.isin == isin } ?: return@launch
-            val symbol = cert.underlyingName
+            val symbol = cert.underlyingName.trim()
             val now = formatter.format(Date())
 
-            // 🔹 TwelveData
-            try {
-                Log.d("ViewModel", "Fetching price from TwelveData for $symbol")
-                val resultTwelve = TwelveDataFetcher.fetchLatestClose(symbol, ApiKeys.TWELVEDATA)
-                if (resultTwelve is FetchResult.Success) {
-                    updateCertificatePrice(isin, resultTwelve.price, now)
-                    incrementApiUsage("Twelve Data")
-                    return@launch
-                } else if (resultTwelve is FetchResult.Error) {
-                    Log.d("ViewModel", "TwelveData error for $symbol: ${resultTwelve.message}")
-                }
-            } catch (t: Throwable) {
-                Log.e("ViewModel", "TwelveData exception for $symbol", t)
+            logApi("───────────────────────────────")
+            logApi("🔹 Richiesta aggiornamento per $symbol ($isin)")
+
+            // Determina provider in base al suffisso
+            val provider = when {
+                symbol.endsWith(".MI", ignoreCase = true) -> ApiProvider.MARKETSTACK
+                symbol.contains(".") -> ApiProvider.ALPHAVANTAGE
+                else -> ApiProvider.TWELVEDATA
             }
 
-            // 🔹 Marketstack
-            try {
-                Log.d("ViewModel", "Fetching price from Marketstack for $symbol")
-                val resultMarket = MarketstackFetcher.fetchLatestClose(symbol, ApiKeys.MARKETSTACK)
-                if (resultMarket is FetchResult.Success) {
-                    updateCertificatePrice(isin, resultMarket.price, now)
-                    incrementApiUsage("Marketstack")
-                    return@launch
-                } else if (resultMarket is FetchResult.Error) {
-                    Log.d("ViewModel", "Marketstack error for $symbol: ${resultMarket.message}")
+            logApi("⚙️ Provider selezionato: ${provider.displayName}")
+
+            when (provider) {
+                ApiProvider.TWELVEDATA -> {
+                    try {
+                        logApi("🌐 Twelve Data → richiesta per $symbol")
+                        val result = TwelveDataFetcher.fetchLatestClose(symbol, ApiKeys.TWELVEDATA)
+                        when (result) {
+                            is FetchResult.Success -> {
+                                logApi("✅ Twelve Data → ${result.price}")
+                                updateCertificatePrice(isin, result.price, now)
+                                incrementApiUsage(provider.displayName)
+                            }
+                            is FetchResult.Error -> logApi("❌ Twelve Data → ${result.message}")
+                        }
+                    } catch (t: Throwable) {
+                        logApi("💥 Twelve Data eccezione: ${t.message}")
+                    }
                 }
-            } catch (t: Throwable) {
-                Log.e("ViewModel", "Marketstack exception for $symbol", t)
+
+                ApiProvider.MARKETSTACK -> {
+                    try {
+                        logApi("🌐 Marketstack → richiesta per $symbol")
+                        val result = MarketstackFetcher.fetchLatestClose(symbol, ApiKeys.MARKETSTACK)
+                        when (result) {
+                            is FetchResult.Success -> {
+                                logApi("✅ Marketstack → ${result.price}")
+                                updateCertificatePrice(isin, result.price, now)
+                                incrementApiUsage(provider.displayName)
+                            }
+                            is FetchResult.Error -> logApi("❌ Marketstack → ${result.message}")
+                        }
+                    } catch (t: Throwable) {
+                        logApi("💥 Marketstack eccezione: ${t.message}")
+                    }
+                }
+
+                ApiProvider.ALPHAVANTAGE -> {
+                    try {
+                        logApi("🌐 Alpha Vantage → richiesta per $symbol")
+                        val result = AlphaVantageFetcher.fetchLatestClose(symbol, ApiKeys.ALPHAVANTAGE)
+                        when (result) {
+                            is FetchResult.Success -> {
+                                logApi("✅ Alpha Vantage → ${result.price}")
+                                updateCertificatePrice(isin, result.price, now)
+                                incrementApiUsage(provider.displayName)
+                            }
+                            is FetchResult.Error -> logApi("❌ Alpha Vantage → ${result.message}")
+                        }
+                    } catch (t: Throwable) {
+                        logApi("💥 Alpha Vantage eccezione: ${t.message}")
+                    }
+                }
             }
 
-            // 🔹 AlphaVantage
-            try {
-                Log.d("ViewModel", "Fetching price from AlphaVantage for $symbol")
-                val resultAlpha = AlphaVantageFetcher.fetchLatestClose(symbol, ApiKeys.ALPHAVANTAGE)
-                if (resultAlpha is FetchResult.Success) {
-                    updateCertificatePrice(isin, resultAlpha.price, now)
-                    incrementApiUsage("Alpha Vantage")
-                    return@launch
-                } else if (resultAlpha is FetchResult.Error) {
-                    Log.d("ViewModel", "AlphaVantage error for $symbol: ${resultAlpha.message}")
-                }
-            } catch (t: Throwable) {
-                Log.e("ViewModel", "AlphaVantage exception for $symbol", t)
-            }
-
-            Log.w("ViewModel", "No price available for $symbol from configured providers")
+            logApi("✅ Fine aggiornamento per $symbol ($isin)")
         }
     }
 

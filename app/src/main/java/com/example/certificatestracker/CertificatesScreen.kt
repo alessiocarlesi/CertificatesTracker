@@ -248,6 +248,21 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = { navController.navigate("apilogs") },
+                    modifier = Modifier.weight(1f).height(50.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFADD8E6),
+                        contentColor = Color.Black
+                    )
+                ) { Text("📡 Log API", fontSize = 20.sp) }
+            }
+
         }
     }
 
@@ -272,6 +287,8 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
         )
     }
 }
+
+
 
 // 🔹 Funzioni di supporto
 fun Double.format(digits: Int) = "%.${digits}f".format(this)

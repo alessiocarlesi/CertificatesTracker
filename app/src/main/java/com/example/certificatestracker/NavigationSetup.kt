@@ -23,5 +23,10 @@ fun AppNavigation(viewModel: CertificatesViewModel) {
             val certificates = viewModel.certificates.collectAsState().value
             MonthlySummaryScreen(certificates = certificates)
         }
+
+        composable("apilogs") {
+            ApiLogsScreen(viewModel = viewModel)
+        }
+
     }
 }
