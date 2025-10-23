@@ -7,13 +7,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
 fun MonthlySummaryScreen(certificates: List<Certificate>) {
-    val (monthNames, perIsinBonuses, totalBonuses) = remember {
+    val (monthNames, perIsinBonuses, totalBonuses, virtualBonuses) = remember {
         MonthlyBonusCalculator.calculateDetailed(certificates)
     }
 
@@ -29,7 +30,15 @@ fun MonthlySummaryScreen(certificates: List<Certificate>) {
             modifier = Modifier.padding(bottom = 8.dp)
         )
 
-        // 🔹 Intestazione
+        // 🔹 Legenda colori
+        Text(
+            "💠 = simulazione / 🟩 = Totale virtuale / ⚫ = Totale reale",
+            color = Color.Gray,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        // 🔹 Intestazione colonne
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -72,11 +81,18 @@ fun MonthlySummaryScreen(certificates: List<Certificate>) {
                         modifier = Modifier.weight(2f),
                         fontSize = 14.sp
                     )
+
                     values.forEach { value ->
-                        val color = if (value < 0)
-                            MaterialTheme.colorScheme.error
-                        else
-                            MaterialTheme.colorScheme.onBackground
+                        val cert = certificates.find { it.isin == isin }
+                        val isVirtual = cert?.purchasePrice?.let {
+                            ((it * 1000).toInt() % 10 == 1)
+                        } ?: false
+
+                        val color = when {
+                            isVirtual -> Color(0xFF2196F3) // 💠 Celeste
+                            value < 0 -> MaterialTheme.colorScheme.error
+                            else -> MaterialTheme.colorScheme.onBackground
+                        }
 
                         Text(
                             text = "€${"%.2f".format(value)}",
@@ -109,6 +125,31 @@ fun MonthlySummaryScreen(certificates: List<Certificate>) {
                             text = "€${"%.2f".format(it)}",
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
+                            modifier = Modifier.weight(1f),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.End
+                        )
+                    }
+                }
+
+                // 🔹 Riga Totale virtuale
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Start
+                ) {
+                    Text(
+                        "TOTALE VIRTUALE",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = Color(0xFF008000), // 🟩 Verde
+                        modifier = Modifier.weight(2f)
+                    )
+                    for (i in totalBonuses.indices) {
+                        val combined = totalBonuses[i] + virtualBonuses[i]
+                        Text(
+                            text = "€${"%.2f".format(combined)}",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = Color(0xFF008000),
                             modifier = Modifier.weight(1f),
                             textAlign = androidx.compose.ui.text.style.TextAlign.End
                         )
