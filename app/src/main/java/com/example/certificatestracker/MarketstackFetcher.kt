@@ -17,7 +17,7 @@ object MarketstackFetcher {
     private val gson = Gson()
 
     suspend fun fetchLatestClose(symbol: String, apiKey: String): FetchResult = withContext(Dispatchers.IO) {
-        val url = "https://api.marketstack.com/v1/eod?symbols=$symbol&access_key=$apiKey"
+        val url = "https://api.marketstack.com/v2/eod?symbols=$symbol&access_key=$apiKey"
         Log.d("API_QUERY_OUT", "Sending Marketstack request: $url")
 
         val request = Request.Builder().url(url).build()
