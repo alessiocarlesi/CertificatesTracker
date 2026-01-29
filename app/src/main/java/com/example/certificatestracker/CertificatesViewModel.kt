@@ -1,51 +1,78 @@
-// filename: CertificatesViewModel.kt
 package com.example.certificatestracker
 
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 import androidx.compose.runtime.mutableStateListOf
 
-
 class CertificatesViewModel(
     private val dao: CertificatesDao,
-    private val apiUsageDao: ApiUsageDao
+    private val apiUsageDao: ApiUsageDao,
+    private val insertionDao: CertificateInsertionDao // Aggiunto Dao Inserzioni
 ) : ViewModel() {
 
-    // 🔹 Aggiungi in cima alla classe, fuori da fetchAndUpdatePrice():
     private val _apiLogs = mutableStateListOf<String>()
     val apiLogs: List<String> get() = _apiLogs
 
     private fun logApi(message: String) {
         val timestamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
         _apiLogs.add("[$timestamp] $message")
-        if (_apiLogs.size > 200) _apiLogs.removeFirst() // evita overflow
+        if (_apiLogs.size > 200) _apiLogs.removeFirst()
     }
 
     private val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
 
-    // Flussi
+    // Flusso Certificati
     val certificates: StateFlow<List<Certificate>> =
         dao.getAllFlow().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
+    // Flusso Utilizzo API
     val apiUsages: StateFlow<List<ApiUsage>> =
         apiUsageDao.getAllFlow().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-    // Aggiungi/Inserisci certificato
+    // Mappa delle date di inserimento (ISIN -> Data)
+    // Usiamo un StateFlow per monitorare i cambiamenti nel database delle inserzioni
+    private val _insertionDates = MutableStateFlow<Map<String, String>>(emptyMap())
+    val insertionDates: StateFlow<Map<String, String>> = _insertionDates.asStateFlow()
+
+    init {
+        // Carica le date di inserimento all'avvio
+        refreshInsertionDates()
+    }
+
+    fun refreshInsertionDates() {
+        viewModelScope.launch {
+            // In un progetto reale potresti voler osservare il DB con un Flow,
+            // qui carichiamo i dati necessari per il calcolo.
+            val allCerts = certificates.value
+            val map = mutableMapOf<String, String>()
+            allCerts.forEach { cert ->
+                insertionDao.getByIsin(cert.isin)?.let {
+                    map[cert.isin] = it.insertionDate
+                }
+            }
+            _insertionDates.value = map
+        }
+    }
+
+    // Aggiungi certificato con gestione della data di inserimento
     fun addCertificate(certificate: Certificate) {
         viewModelScope.launch {
             dao.insert(certificate)
+            // Se non esiste già una data di inserimento, usiamo oggi
+            if (insertionDao.getByIsin(certificate.isin) == null) {
+                val today = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
+                insertionDao.insert(CertificateInsertion(certificate.isin, today))
+                refreshInsertionDates()
+            }
             Log.d("ViewModel", "Inserted certificate: ${certificate.isin}")
         }
     }
 
-    // Aggiorna certificato (oggetto completo)
     fun updateCertificate(certificate: Certificate) {
         viewModelScope.launch {
             dao.update(certificate)
@@ -53,7 +80,6 @@ class CertificatesViewModel(
         }
     }
 
-    // Elimina certificato
     fun deleteCertificate(isin: String) {
         viewModelScope.launch {
             dao.deleteByIsin(isin)
@@ -61,10 +87,6 @@ class CertificatesViewModel(
         }
     }
 
-
-
-
-    // Aggiorna prezzo e timestamp chiamando i provider in ordine
     fun fetchAndUpdatePrice(isin: String) {
         viewModelScope.launch {
             val cert = certificates.value.find { it.isin == isin } ?: return@launch
@@ -74,7 +96,6 @@ class CertificatesViewModel(
             logApi("───────────────────────────────")
             logApi("🔹 Richiesta aggiornamento per $symbol ($isin)")
 
-            // Determina provider in base al suffisso
             val provider = when {
                 symbol.endsWith(".MI", ignoreCase = true) -> ApiProvider.MARKETSTACK
                 symbol.contains(".") -> ApiProvider.ALPHAVANTAGE
@@ -85,94 +106,69 @@ class CertificatesViewModel(
 
             when (provider) {
                 ApiProvider.TWELVEDATA -> {
-                    try {
-                        logApi("🌐 Twelve Data → richiesta per $symbol")
-                        val result = TwelveDataFetcher.fetchLatestClose(symbol, ApiKeys.TWELVEDATA)
-                        when (result) {
-                            is FetchResult.Success -> {
-                                logApi("✅ Twelve Data → ${result.price}")
-                                updateCertificatePrice(isin, result.price, now)
-                                incrementApiUsage(provider.displayName)
-                            }
-                            is FetchResult.Error -> logApi("❌ Twelve Data → ${result.message}")
-                        }
-                    } catch (t: Throwable) {
-                        logApi("💥 Twelve Data eccezione: ${t.message}")
-                    }
+                    val result = TwelveDataFetcher.fetchLatestClose(symbol, ApiKeys.TWELVEDATA)
+                    handleFetchResult(result, isin, now, provider)
                 }
-
                 ApiProvider.MARKETSTACK -> {
-                    try {
-                        logApi("🌐 Marketstack → richiesta per $symbol")
-                        val result = MarketstackFetcher.fetchLatestClose(symbol, ApiKeys.MARKETSTACK)
-                        when (result) {
-                            is FetchResult.Success -> {
-                                logApi("✅ Marketstack → ${result.price}")
-                                updateCertificatePrice(isin, result.price, now)
-                                incrementApiUsage(provider.displayName)
-                            }
-                            is FetchResult.Error -> logApi("❌ Marketstack → ${result.message}")
-                        }
-                    } catch (t: Throwable) {
-                        logApi("💥 Marketstack eccezione: ${t.message}")
-                    }
+                    val result = MarketstackFetcher.fetchLatestClose(symbol, ApiKeys.MARKETSTACK)
+                    handleFetchResult(result, isin, now, provider)
                 }
-
                 ApiProvider.ALPHAVANTAGE -> {
-                    try {
-                        logApi("🌐 Alpha Vantage → richiesta per $symbol")
-                        val result = AlphaVantageFetcher.fetchLatestClose(symbol, ApiKeys.ALPHAVANTAGE)
-                        when (result) {
-                            is FetchResult.Success -> {
-                                logApi("✅ Alpha Vantage → ${result.price}")
-                                updateCertificatePrice(isin, result.price, now)
-                                incrementApiUsage(provider.displayName)
-                            }
-                            is FetchResult.Error -> logApi("❌ Alpha Vantage → ${result.message}")
-                        }
-                    } catch (t: Throwable) {
-                        logApi("💥 Alpha Vantage eccezione: ${t.message}")
-                    }
+                    val result = AlphaVantageFetcher.fetchLatestClose(symbol, ApiKeys.ALPHAVANTAGE)
+                    handleFetchResult(result, isin, now, provider)
                 }
             }
-
-            logApi("✅ Fine aggiornamento per $symbol ($isin)")
         }
     }
 
-    // Aggiorna prezzo direttamente in DB
+    private fun handleFetchResult(result: FetchResult, isin: String, now: String, provider: ApiProvider) {
+        viewModelScope.launch {
+            when (result) {
+                is FetchResult.Success -> {
+                    logApi("✅ ${provider.displayName} → ${result.price}")
+                    updateCertificatePrice(isin, result.price, now)
+                    incrementApiUsage(provider.displayName)
+                }
+                is FetchResult.Error -> logApi("❌ ${provider.displayName} → ${result.message}")
+            }
+        }
+    }
+
     private fun updateCertificatePrice(isin: String, price: Double, timestamp: String) {
         viewModelScope.launch {
-            val safePrice = price ?: 0.0
-            val roundedPrice = (kotlin.math.round(safePrice * 100) / 100.0)
+            val roundedPrice = (kotlin.math.round(price * 100) / 100.0)
             dao.updatePriceAndTimestamp(isin, roundedPrice, timestamp)
-            Log.d("ViewModel", "Updated price for $isin: $price at $timestamp")
         }
     }
 
-    // Incremento contatori API
     private fun incrementApiUsage(providerName: String) {
         viewModelScope.launch {
             val usage = apiUsageDao.get(providerName)
-            val now = formatter.format(Date())
+
+            // 1. Usiamo lo stesso formato che vediamo nel Database Inspector (YYYY-MM-DD)
+            val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+
+            // 2. Formato completo per il salvataggio (quello che già usi)
+            val currentTimestamp = formatter.format(Date())
+
             if (usage != null) {
+                // Se la stringa lastUpdated NON inizia con la data di oggi (es. 2026-01-29), resetta
+                val isNewDay = !usage.lastUpdated.startsWith(todayDate)
+
+                val newDailyCount = if (isNewDay) 1 else usage.dailyCount + 1
+
                 apiUsageDao.insert(
                     usage.copy(
-                        dailyCount = usage.dailyCount + 1,
+                        dailyCount = newDailyCount,
                         monthlyCount = usage.monthlyCount + 1,
-                        lastUpdated = now
+                        lastUpdated = currentTimestamp
                     )
                 )
             } else {
-                apiUsageDao.insert(ApiUsage(providerName, 1, 1, now))
+                apiUsageDao.insert(ApiUsage(providerName, 1, 1, currentTimestamp))
             }
-            Log.d("ViewModel", "Incremented API usage for $providerName")
         }
     }
-
-    fun parseDouble(input: String) = input.replace(',', '.').toDoubleOrNull() ?: 0.0
-
-    // 🔸 Aggiorna nextbonus e valautocall solo se si è entrati nel mese successivo
     fun updateDatesIfNeeded(cert: Certificate): Certificate {
         var updatedNextbonus = cert.nextbonus
         var updatedValautocall = cert.valautocall
@@ -197,18 +193,13 @@ class CertificatesViewModel(
 
         val cal = Calendar.getInstance()
         cal.set(parts[2].toInt(), parts[1].toInt() - 1, parts[0].toInt())
-
         val today = Calendar.getInstance()
 
-        // ✅ Se la data è passata MA siamo ancora nello stesso mese → non aggiornare
         if (cal.before(today) &&
             cal.get(Calendar.MONTH) == today.get(Calendar.MONTH) &&
             cal.get(Calendar.YEAR) == today.get(Calendar.YEAR)
-        ) {
-            return null
-        }
+        ) return null
 
-        // ✅ Se la data è passata ed è iniziato un nuovo mese → aggiorna
         if (cal.before(today)) {
             cal.add(Calendar.MONTH, monthsToAdd)
             val day = cal.get(Calendar.DAY_OF_MONTH).toString().padStart(2, '0')
@@ -216,7 +207,6 @@ class CertificatesViewModel(
             val year = cal.get(Calendar.YEAR)
             return "$day/$month/$year"
         }
-
         return null
     }
 }

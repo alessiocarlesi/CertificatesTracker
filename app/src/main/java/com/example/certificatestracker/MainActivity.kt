@@ -1,4 +1,4 @@
-// filename: MainActivity.kt
+// filename: app/src/main/java/com/example/certificatestracker/MainActivity.kt
 package com.example.certificatestracker
 
 import android.os.Bundle
@@ -16,24 +16,30 @@ class MainActivity : ComponentActivity() {
     private lateinit var certificatesViewModel: CertificatesViewModel
     private lateinit var dao: CertificatesDao
     private lateinit var apiUsageDao: ApiUsageDao
+    private lateinit var insertionDao: CertificateInsertionDao // 🔹 Nuovo DAO per le date di acquisto
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 🔹 Ottieni il database in modo sicuro (restore se corrotto)
+        // 1. Inizializzazione Database Certificati (Anagrafica principale)
         val safeDb = CertificatesDatabase.getDatabase(applicationContext)
-
-        // 🔹 Ottieni DAO dal database sicuro
         dao = safeDb.certificatesDao()
-        apiUsageDao = ApiUsageDatabase.getDatabase(applicationContext).apiUsageDao() // separato dal backup principale
 
-        // 🔹 Crea ViewModel con entrambi i DAO
+        // 2. Inizializzazione Database Utilizzo API
+        apiUsageDao = ApiUsageDatabase.getDatabase(applicationContext).apiUsageDao()
+
+        // 3. Inizializzazione Database Inserzioni (Date di acquisto separate)
+        // Questo database protegge le tue date di inserimento se resetti l'anagrafica
+        val insertionDb = InsertionDatabase.getDatabase(applicationContext)
+        insertionDao = insertionDb.insertionDao()
+
+        // 4. Creazione ViewModel tramite Factory aggiornata con 3 parametri
         certificatesViewModel = ViewModelProvider(
             this,
-            CertificatesViewModelFactory(dao, apiUsageDao)
+            CertificatesViewModelFactory(dao, apiUsageDao, insertionDao)
         )[CertificatesViewModel::class.java]
 
-        // 🔹 Composable UI con navigazione
+        // UI
         setContent {
             MaterialTheme {
                 Surface {
@@ -42,14 +48,18 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // 🔹 Aggiorna tutti i prezzi all’avvio
+        // Caricamento iniziale e aggiornamento prezzi
         CoroutineScope(Dispatchers.Main).launch {
+            // Sincronizziamo le date di inserimento prima di aggiornare i prezzi
+            certificatesViewModel.refreshInsertionDates()
+
+            // Aggiorna i prezzi di tutti i certificati presenti
             certificatesViewModel.certificates.value.forEach { cert ->
                 certificatesViewModel.fetchAndUpdatePrice(cert.isin)
             }
         }
 
-        // 🔹 Salva subito un backup aggiornato del DB
+        // Backup automatico del database principale
         DatabaseBackupHelper.backupDatabase(this)
     }
 }

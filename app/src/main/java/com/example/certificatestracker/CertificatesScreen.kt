@@ -1,4 +1,4 @@
-// filename: CertificatesScreen.kt
+// filename: app/src/main/java/com/example/certificatestracker/CertificatesScreen.kt
 package com.example.certificatestracker
 
 import androidx.compose.foundation.layout.*
@@ -8,20 +8,21 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.style.TextAlign
 import androidx.navigation.NavController
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavController) {
+    // Osserviamo i flussi dal ViewModel
     val certificatesFlow by viewModel.certificates.collectAsState(initial = emptyList())
     val apiUsages by viewModel.apiUsages.collectAsState(initial = emptyList())
+    val insertionDates by viewModel.insertionDates.collectAsState() // 🔹 Fondamentale per il calcolo bonus
 
     var currentIndex by remember { mutableStateOf(0) }
     var showEditScreen by remember { mutableStateOf(false) }
@@ -39,6 +40,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
         ) {
             showEditScreen = false
             selectedCert = null
+            viewModel.refreshInsertionDates() // 🔹 Aggiorna le date quando torni indietro
         }
     } else {
         Column(
@@ -48,13 +50,6 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
                 .padding(16.dp)
         ) {
             val certificates = certificatesFlow.map { viewModel.updateDatesIfNeeded(it) }
-
-            LaunchedEffect(certificates) {
-                if (certificates.isNotEmpty()) {
-                    val bonusesData = MonthlyBonusCalculator.calculate(certificates)
-                    kotlinx.coroutines.delay(1000)
-                }
-            }
 
             if (certificates.isNotEmpty()) {
                 val cert = certificates.getOrNull(currentIndex)
@@ -98,8 +93,9 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(30.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
+                    // Navigazione tra certificati
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -108,10 +104,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
                         Button(
                             onClick = { if (currentIndex > 0) currentIndex-- },
                             modifier = Modifier.weight(1f).height(60.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (currentIndex == 0) Color.LightGray else Color(0xFFADD8E6),
-                                contentColor = Color.DarkGray
-                            )
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFADD8E6), contentColor = Color.DarkGray)
                         ) { Text("<", fontSize = 30.sp) }
 
                         Text(
@@ -125,38 +118,14 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
                         Button(
                             onClick = { if (currentIndex < certificates.size - 1) currentIndex++ },
                             modifier = Modifier.weight(1f).height(60.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (currentIndex == certificates.size - 1) Color.LightGray else Color(0xFFADD8E6),
-                                contentColor = Color.DarkGray
-                            )
-                        ) { Text(">", fontSize = 40.sp) }
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFADD8E6), contentColor = Color.DarkGray)
+                        ) { Text(">", fontSize = 30.sp) }
                     }
 
-                    Spacer(modifier = Modifier.height(40.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = {
-                                selectedCert = it
-                                showDeleteDialog = true
-                            },
-                            modifier = Modifier.weight(1f).height(50.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFADD8E6),
-                                contentColor = Color.DarkGray
-                            )
-                        ) { Text("Cancella questo ISIN", fontSize = 20.sp) }
-                    }
-
-                    Spacer(modifier = Modifier.height(30.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                    // Azioni sul certificato corrente
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Button(
                             onClick = {
                                 scope.launch {
@@ -166,103 +135,77 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
                                     recentlyUpdated[it.isin] = false
                                 }
                             },
-                            modifier = Modifier.weight(1f).height(50.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFADD8E6),
-                                contentColor = Color.Black
-                            )
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFADD8E6), contentColor = Color.Black)
                         ) { Text("Aggiorna prezzo", fontSize = 20.sp) }
-                    }
 
-                    Spacer(modifier = Modifier.height(30.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
                         Button(
                             onClick = { selectedCert = it; showEditScreen = true },
-                            modifier = Modifier.weight(1f).height(50.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFADD8E6),
-                                contentColor = Color.Black
-                            )
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFADD8E6), contentColor = Color.Black)
                         ) { Text("Modifica questo ISIN", fontSize = 20.sp) }
+
+                        Button(
+                            onClick = { selectedCert = it; showDeleteDialog = true },
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFADD8E6), contentColor = Color.DarkGray)
+                        ) { Text("Cancella questo ISIN", fontSize = 20.sp) }
                     }
                 }
             } else {
-                Text("Nessun certificato inserito")
+                Text("Nessun certificato inserito", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             }
 
             Spacer(modifier = Modifier.height(30.dp))
 
-            // 🔹 Bottone Aggiungi Nuovo
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(
-                    onClick = { selectedCert = null; showEditScreen = true },
-                    modifier = Modifier.weight(1f).height(50.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFADD8E6),
-                        contentColor = Color.Black
-                    )
-                ) { Text("Aggiungi nuovo certificato", fontSize = 20.sp) }
-            }
+            // Pulsanti Generali
+            Button(
+                onClick = { selectedCert = null; showEditScreen = true },
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFADD8E6), contentColor = Color.Black)
+            ) { Text("Aggiungi nuovo certificato", fontSize = 20.sp) }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Button(
+                onClick = { navController.navigate("summary") },
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFADD8E6), contentColor = Color.Black)
+            ) { Text("📊 Vedi Riepilogo Bonus", fontSize = 20.sp) }
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // 🔹 NUOVO: pulsante riepilogo bonus mensili
-            Row(
+            // 🔹 CALCOLO BONUS FILTRATO PER DATA ACQUISTO
+            val monthlyBonuses = remember(certificatesFlow, insertionDates) {
+                MonthlyBonusCalculator.calculate(certificatesFlow, insertionDates)
+            }
+
+            Card(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F8FF))
             ) {
-                Button(
-                    onClick = { navController.navigate("summary") },
-                    modifier = Modifier.weight(1f).height(50.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFADD8E6),
-                        contentColor = Color.Black
-                    )
-                ) { Text("📊 Vedi Riepilogo Bonus", fontSize = 20.sp) }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // 🔹 Mostra bonus mensili sintetici
-            val monthlyBonuses = remember(certificatesFlow) {
-                MonthlyBonusCalculator.calculate(certificatesFlow)
-            }
-
-            Text(
-                text = buildString {
-                    append("BONUS\n")
+                Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("BONUS PROSSIMI MESI", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
                     for (i in monthlyBonuses.monthNames.indices) {
-                        append("${monthlyBonuses.monthNames[i]}: ${monthlyBonuses.bonuses[i].format2(2)} €\n")
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(monthlyBonuses.monthNames[i], fontWeight = FontWeight.Bold)
+                            Text("${monthlyBonuses.bonuses[i].format2(2)} €", fontWeight = FontWeight.Bold, color = Color(0xFF005A9C))
+                        }
                     }
-                },
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF444444),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(
-                    onClick = { navController.navigate("apilogs") },
-                    modifier = Modifier.weight(1f).height(50.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFADD8E6),
-                        contentColor = Color.Black
-                    )
-                ) { Text("📡 Log API", fontSize = 20.sp) }
+                }
             }
 
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Button(
+                onClick = { navController.navigate("apilogs") },
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFADD8E6), contentColor = Color.Black)
+            ) { Text("📡 Log API", fontSize = 20.sp) }
         }
     }
 
@@ -279,17 +222,12 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
                 }) { Text("Sì, elimina", color = Color.Red) }
             },
             dismissButton = {
-                TextButton(onClick = {
-                    showDeleteDialog = false
-                    selectedCert = null
-                }) { Text("Annulla") }
+                TextButton(onClick = { showDeleteDialog = false; selectedCert = null }) { Text("Annulla") }
             }
         )
     }
-}
+}// Aggiungi queste funzioni in fondo a CertificatesScreen.kt
+// (fuori dalla classe/funzione principale) o in Helpers.kt
 
-
-
-// 🔹 Funzioni di supporto
 fun Double.format(digits: Int) = "%.${digits}f".format(this)
 fun Double.format2(digits: Int) = "%.${digits}f".format(this)

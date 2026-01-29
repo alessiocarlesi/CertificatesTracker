@@ -1,4 +1,4 @@
-// filename: NavigationSetup.kt
+// filename: app/src/main/java/com/example/certificatestracker/NavigationSetup.kt
 package com.example.certificatestracker
 
 import androidx.compose.runtime.Composable
@@ -13,20 +13,21 @@ fun AppNavigation(viewModel: CertificatesViewModel) {
     val navController: NavHostController = rememberNavController()
 
     NavHost(navController = navController, startDestination = "certificates") {
-        // 🔹 Schermata principale
+
+        // 🔹 Schermata principale (Lista/Dettaglio)
         composable("certificates") {
             CertificatesScreen(viewModel = viewModel, navController = navController)
         }
 
-        // 🔹 Schermata di riepilogo bonus mensili
+        // 🔹 Schermata di riepilogo bonus mensili (Tabella)
         composable("summary") {
-            val certificates = viewModel.certificates.collectAsState().value
-            MonthlySummaryScreen(certificates = certificates)
+            // Passiamo il viewModel completo per permettere il recupero delle date di acquisto
+            MonthlySummaryScreen(viewModel = viewModel)
         }
 
+        // 🔹 Schermata Log API
         composable("apilogs") {
             ApiLogsScreen(viewModel = viewModel)
         }
-
     }
 }
