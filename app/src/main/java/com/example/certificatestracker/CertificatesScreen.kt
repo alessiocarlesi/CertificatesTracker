@@ -1,4 +1,3 @@
-// filename: app/src/main/java/com/example/certificatestracker/CertificatesScreen.kt
 package com.example.certificatestracker
 
 import androidx.compose.foundation.layout.*
@@ -19,10 +18,9 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavController) {
-    // Osserviamo i flussi dal ViewModel
     val certificatesFlow by viewModel.certificates.collectAsState(initial = emptyList())
     val apiUsages by viewModel.apiUsages.collectAsState(initial = emptyList())
-    val insertionDates by viewModel.insertionDates.collectAsState() // 🔹 Fondamentale per il calcolo bonus
+    val insertionDates by viewModel.insertionDates.collectAsState()
 
     var currentIndex by remember { mutableStateOf(0) }
     var showEditScreen by remember { mutableStateOf(false) }
@@ -40,7 +38,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
         ) {
             showEditScreen = false
             selectedCert = null
-            viewModel.refreshInsertionDates() // 🔹 Aggiorna le date quando torni indietro
+            viewModel.refreshInsertionDates()
         }
     } else {
         Column(
@@ -56,15 +54,18 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
                 cert?.let {
                     val textColor = if (recentlyUpdated[it.isin] == true) Color(0xFF008000) else Color.Black
 
-                    val strikePerc = if (it.strike != 0.0) ((it.lastPrice - it.strike) / it.strike * 100) else 0.0
-                    val barrierPerc = if (it.barrier != 0.0) ((it.lastPrice - it.barrier) / it.barrier * 100) else 0.0
-                    val bonusPerc = if (it.bonusLevel != 0.0) ((it.lastPrice - it.bonusLevel) / it.bonusLevel * 100) else 0.0
-                    val autocallPerc = if (it.autocallLevel != 0.0) ((it.lastPrice - it.autocallLevel) / it.autocallLevel * 100) else 0.0
+                    // 🔹 CALCOLI PERCENTUALI: Basati sul prezzo del sottostante (underlyingPrice)
+                    val strikePerc = if (it.strike != 0.0) ((it.underlyingPrice - it.strike) / it.strike * 100) else 0.0
+                    val barrierPerc = if (it.barrier != 0.0) ((it.underlyingPrice - it.barrier) / it.barrier * 100) else 0.0
+                    val bonusPerc = if (it.bonusLevel != 0.0) ((it.underlyingPrice - it.bonusLevel) / it.bonusLevel * 100) else 0.0
+                    val autocallPerc = if (it.autocallLevel != 0.0) ((it.underlyingPrice - it.autocallLevel) / it.autocallLevel * 100) else 0.0
 
                     Text(
                         text = buildString {
                             append("ISIN: ${it.isin} (${it.lastUpdate ?: "-"})\n")
-                            append("Sottostante: ${it.underlyingName} - Prezzo: ${it.lastPrice} EUR\n")
+                            // 🔹 Visualizzazione Sdoppiata
+                            append("Valore Mercato: ${it.lastPrice} EUR\n")
+                            append("Sottostante: ${it.underlyingName} - Prezzo: ${it.underlyingPrice} EUR\n")
                             append("Quantità: ${it.quantity}")
                             if (it.purchasePrice != null) {
                                 append("  Costo: €${it.purchasePrice}")
@@ -95,7 +96,6 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
 
                     Spacer(modifier = Modifier.height(20.dp))
 
-                    // Navigazione tra certificati
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -124,12 +124,24 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
 
                     Spacer(modifier = Modifier.height(20.dp))
 
-                    // Azioni sul certificato corrente
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Button(
                             onClick = {
                                 scope.launch {
-                                    viewModel.fetchAndUpdatePrice(it.isin)
+                                    viewModel.fetchAndUpdatePrice(it.isin, useBorsaItaliana = true)
+                                    recentlyUpdated[it.isin] = true
+                                    delay(2000)
+                                    recentlyUpdated[it.isin] = false
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF90EE90), contentColor = Color.Black)
+                        ) { Text("Aggiorna Quotazione Borsa IT", fontSize = 18.sp) }
+
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    viewModel.fetchAndUpdatePrice(it.isin, useBorsaItaliana = false)
                                     recentlyUpdated[it.isin] = true
                                     delay(2000)
                                     recentlyUpdated[it.isin] = false
@@ -137,19 +149,13 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
                             },
                             modifier = Modifier.fillMaxWidth().height(50.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFADD8E6), contentColor = Color.Black)
-                        ) { Text("Aggiorna prezzo", fontSize = 20.sp) }
+                        ) { Text("Aggiorna Sottostante (API)", fontSize = 18.sp) }
 
                         Button(
                             onClick = { selectedCert = it; showEditScreen = true },
                             modifier = Modifier.fillMaxWidth().height(50.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFADD8E6), contentColor = Color.Black)
-                        ) { Text("Modifica questo ISIN", fontSize = 20.sp) }
-
-                        Button(
-                            onClick = { selectedCert = it; showDeleteDialog = true },
-                            modifier = Modifier.fillMaxWidth().height(50.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFADD8E6), contentColor = Color.DarkGray)
-                        ) { Text("Cancella questo ISIN", fontSize = 20.sp) }
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE6E6FA), contentColor = Color.Black)
+                        ) { Text("Modifica questo ISIN", fontSize = 18.sp) }
                     }
                 }
             } else {
@@ -158,12 +164,24 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
 
             Spacer(modifier = Modifier.height(30.dp))
 
-            // Pulsanti Generali
+// Sostituisci il vecchio pulsante "AGGIORNA TUTTO" con questo:
+            Button(
+                onClick = { viewModel.updateAllCertificates() },
+                modifier = Modifier.fillMaxWidth().height(60.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF32CD32),
+                    contentColor = Color.White
+                )
+            ) {
+                Text("🔄 AGGIORNA TUTTO (Borsa IT)", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+
             Button(
                 onClick = { selectedCert = null; showEditScreen = true },
                 modifier = Modifier.fillMaxWidth().height(50.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFADD8E6), contentColor = Color.Black)
-            ) { Text("Aggiungi nuovo certificato", fontSize = 20.sp) }
+            ) { Text("➕ Aggiungi nuovo certificato", fontSize = 20.sp) }
 
             Spacer(modifier = Modifier.height(10.dp))
 
@@ -175,7 +193,6 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // 🔹 CALCOLO BONUS FILTRATO PER DATA ACQUISTO
             val monthlyBonuses = remember(certificatesFlow, insertionDates) {
                 MonthlyBonusCalculator.calculate(certificatesFlow, insertionDates)
             }
@@ -226,8 +243,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
             }
         )
     }
-}// Aggiungi queste funzioni in fondo a CertificatesScreen.kt
-// (fuori dalla classe/funzione principale) o in Helpers.kt
+}
 
 fun Double.format(digits: Int) = "%.${digits}f".format(this)
 fun Double.format2(digits: Int) = "%.${digits}f".format(this)

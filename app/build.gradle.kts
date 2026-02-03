@@ -92,5 +92,7 @@ dependencies {
     // ✅ per gestire JSON
     implementation("org.json:json:20231013")
 
+    implementation("org.jsoup:jsoup:1.16.1")
+
 
 }

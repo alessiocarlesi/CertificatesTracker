@@ -16,11 +16,14 @@ data class Certificate(
     val premio: Double = 0.0,
     val nextbonus: String = "",
     val valautocall: String = "",
+
+    // 🔹 VALORE DEL CERTIFICATO (da Borsa Italiana)
     val lastPrice: Double = 0.0,
+
+    // 🔹 VALORE DEL SOTTOSTANTE (da API: ENI, ENEL, ecc.)
+    val underlyingPrice: Double = 0.0,
+
     val lastUpdate: String? = null,
-    val quantity: Int = 0 ,// ✅ nuovo campo
-    // Nuovo campo
-    val purchasePrice: Double? = null,
-
-
+    val quantity: Int = 0,
+    val purchasePrice: Double? = null
 )

@@ -12,7 +12,7 @@ import androidx.compose.runtime.mutableStateListOf
 class CertificatesViewModel(
     private val dao: CertificatesDao,
     private val apiUsageDao: ApiUsageDao,
-    private val insertionDao: CertificateInsertionDao // Aggiunto Dao Inserzioni
+    private val insertionDao: CertificateInsertionDao
 ) : ViewModel() {
 
     private val _apiLogs = mutableStateListOf<String>()
@@ -26,28 +26,21 @@ class CertificatesViewModel(
 
     private val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
 
-    // Flusso Certificati
     val certificates: StateFlow<List<Certificate>> =
         dao.getAllFlow().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-    // Flusso Utilizzo API
     val apiUsages: StateFlow<List<ApiUsage>> =
         apiUsageDao.getAllFlow().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-    // Mappa delle date di inserimento (ISIN -> Data)
-    // Usiamo un StateFlow per monitorare i cambiamenti nel database delle inserzioni
     private val _insertionDates = MutableStateFlow<Map<String, String>>(emptyMap())
     val insertionDates: StateFlow<Map<String, String>> = _insertionDates.asStateFlow()
 
     init {
-        // Carica le date di inserimento all'avvio
         refreshInsertionDates()
     }
 
     fun refreshInsertionDates() {
         viewModelScope.launch {
-            // In un progetto reale potresti voler osservare il DB con un Flow,
-            // qui carichiamo i dati necessari per il calcolo.
             val allCerts = certificates.value
             val map = mutableMapOf<String, String>()
             allCerts.forEach { cert ->
@@ -59,102 +52,102 @@ class CertificatesViewModel(
         }
     }
 
-    // Aggiungi certificato con gestione della data di inserimento
     fun addCertificate(certificate: Certificate) {
         viewModelScope.launch {
             dao.insert(certificate)
-            // Se non esiste già una data di inserimento, usiamo oggi
             if (insertionDao.getByIsin(certificate.isin) == null) {
                 val today = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
                 insertionDao.insert(CertificateInsertion(certificate.isin, today))
                 refreshInsertionDates()
             }
-            Log.d("ViewModel", "Inserted certificate: ${certificate.isin}")
         }
     }
 
     fun updateCertificate(certificate: Certificate) {
         viewModelScope.launch {
             dao.update(certificate)
-            Log.d("ViewModel", "Updated certificate: ${certificate.isin}")
         }
     }
 
     fun deleteCertificate(isin: String) {
         viewModelScope.launch {
             dao.deleteByIsin(isin)
-            Log.d("ViewModel", "Deleted certificate: $isin")
         }
     }
 
-    fun fetchAndUpdatePrice(isin: String) {
+    /**
+     * MODIFICATO: Ora smista correttamente tra Scraper (Mercato) e API (Sottostante)
+     */
+    fun fetchAndUpdatePrice(isin: String, useBorsaItaliana: Boolean = true) {
         viewModelScope.launch {
             val cert = certificates.value.find { it.isin == isin } ?: return@launch
             val symbol = cert.underlyingName.trim()
             val now = formatter.format(Date())
 
             logApi("───────────────────────────────")
-            logApi("🔹 Richiesta aggiornamento per $symbol ($isin)")
 
-            val provider = when {
-                symbol.endsWith(".MI", ignoreCase = true) -> ApiProvider.MARKETSTACK
-                symbol.contains(".") -> ApiProvider.ALPHAVANTAGE
-                else -> ApiProvider.TWELVEDATA
-            }
+            if (useBorsaItaliana) {
+                logApi("🔹 Scraper Borsa IT per $isin")
+                val provider = ApiProvider.BORSA_ITALIANA
+                logApi("⚙️ Metodo: ${provider.displayName}")
 
-            logApi("⚙️ Provider selezionato: ${provider.displayName}")
+                val result = BorsaItalianaFetcher.fetchLatestClose(isin)
+                handleFetchResult(result, isin, now, provider)
+            } else {
+                logApi("🔹 API Sottostante per $symbol ($isin)")
 
-            when (provider) {
-                ApiProvider.TWELVEDATA -> {
-                    val result = TwelveDataFetcher.fetchLatestClose(symbol, ApiKeys.TWELVEDATA)
-                    handleFetchResult(result, isin, now, provider)
+                val provider = when {
+                    symbol.endsWith(".MI", ignoreCase = true) -> ApiProvider.MARKETSTACK
+                    symbol.contains(".") -> ApiProvider.ALPHAVANTAGE
+                    else -> ApiProvider.TWELVEDATA
                 }
-                ApiProvider.MARKETSTACK -> {
-                    val result = MarketstackFetcher.fetchLatestClose(symbol, ApiKeys.MARKETSTACK)
-                    handleFetchResult(result, isin, now, provider)
+
+                logApi("⚙️ Provider: ${provider.displayName}")
+
+                val result = when (provider) {
+                    ApiProvider.TWELVEDATA -> TwelveDataFetcher.fetchLatestClose(symbol, ApiKeys.TWELVEDATA)
+                    ApiProvider.MARKETSTACK -> MarketstackFetcher.fetchLatestClose(symbol, ApiKeys.MARKETSTACK)
+                    ApiProvider.ALPHAVANTAGE -> AlphaVantageFetcher.fetchLatestClose(symbol, ApiKeys.ALPHAVANTAGE)
+                    else -> FetchResult.Error("Provider non configurato")
                 }
-                ApiProvider.ALPHAVANTAGE -> {
-                    val result = AlphaVantageFetcher.fetchLatestClose(symbol, ApiKeys.ALPHAVANTAGE)
-                    handleFetchResult(result, isin, now, provider)
-                }
+                handleFetchResult(result, isin, now, provider)
             }
         }
     }
 
+    /**
+     * MODIFICATO: Smista il salvataggio nelle due colonne differenti del DB
+     */
     private fun handleFetchResult(result: FetchResult, isin: String, now: String, provider: ApiProvider) {
         viewModelScope.launch {
             when (result) {
                 is FetchResult.Success -> {
                     logApi("✅ ${provider.displayName} → ${result.price}")
-                    updateCertificatePrice(isin, result.price, now)
-                    incrementApiUsage(provider.displayName)
+
+                    val roundedPrice = (kotlin.math.round(result.price * 100) / 100.0)
+
+                    if (provider == ApiProvider.BORSA_ITALIANA) {
+                        // Aggiorna il valore di mercato del certificato (lastPrice)
+                        dao.updateCertificatePrice(isin, roundedPrice, now)
+                    } else {
+                        // Aggiorna il valore del sottostante (underlyingPrice)
+                        dao.updateUnderlyingPrice(isin, roundedPrice, now)
+                        incrementApiUsage(provider.displayName)
+                    }
                 }
                 is FetchResult.Error -> logApi("❌ ${provider.displayName} → ${result.message}")
             }
         }
     }
 
-    private fun updateCertificatePrice(isin: String, price: Double, timestamp: String) {
-        viewModelScope.launch {
-            val roundedPrice = (kotlin.math.round(price * 100) / 100.0)
-            dao.updatePriceAndTimestamp(isin, roundedPrice, timestamp)
-        }
-    }
-
     private fun incrementApiUsage(providerName: String) {
         viewModelScope.launch {
             val usage = apiUsageDao.get(providerName)
-
-            // 1. Usiamo lo stesso formato che vediamo nel Database Inspector (YYYY-MM-DD)
             val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-
-            // 2. Formato completo per il salvataggio (quello che già usi)
             val currentTimestamp = formatter.format(Date())
 
             if (usage != null) {
-                // Se la stringa lastUpdated NON inizia con la data di oggi (es. 2026-01-29), resetta
                 val isNewDay = !usage.lastUpdated.startsWith(todayDate)
-
                 val newDailyCount = if (isNewDay) 1 else usage.dailyCount + 1
 
                 apiUsageDao.insert(
@@ -169,6 +162,8 @@ class CertificatesViewModel(
             }
         }
     }
+
+    // --- Gestione Date Bonus/Autocall ---
     fun updateDatesIfNeeded(cert: Certificate): Certificate {
         var updatedNextbonus = cert.nextbonus
         var updatedValautocall = cert.valautocall
@@ -187,26 +182,45 @@ class CertificatesViewModel(
     }
 
     private fun formatDateIfPast(dateStr: String, monthsToAdd: Int): String? {
-        if (monthsToAdd == 0) return null
+        if (monthsToAdd == 0 || dateStr.isBlank()) return null
         val parts = dateStr.split("/")
         if (parts.size != 3) return null
 
         val cal = Calendar.getInstance()
-        cal.set(parts[2].toInt(), parts[1].toInt() - 1, parts[0].toInt())
-        val today = Calendar.getInstance()
+        try {
+            cal.set(parts[2].toInt(), parts[1].toInt() - 1, parts[0].toInt())
+            val today = Calendar.getInstance()
 
-        if (cal.before(today) &&
-            cal.get(Calendar.MONTH) == today.get(Calendar.MONTH) &&
-            cal.get(Calendar.YEAR) == today.get(Calendar.YEAR)
-        ) return null
-
-        if (cal.before(today)) {
-            cal.add(Calendar.MONTH, monthsToAdd)
-            val day = cal.get(Calendar.DAY_OF_MONTH).toString().padStart(2, '0')
-            val month = (cal.get(Calendar.MONTH) + 1).toString().padStart(2, '0')
-            val year = cal.get(Calendar.YEAR)
-            return "$day/$month/$year"
-        }
+            if (cal.before(today)) {
+                cal.add(Calendar.MONTH, monthsToAdd)
+                val day = cal.get(Calendar.DAY_OF_MONTH).toString().padStart(2, '0')
+                val month = (cal.get(Calendar.MONTH) + 1).toString().padStart(2, '0')
+                val year = cal.get(Calendar.YEAR)
+                return "$day/$month/$year"
+            }
+        } catch (e: Exception) { return null }
         return null
     }
+
+    fun updateAllCertificates() {
+        viewModelScope.launch { // <--- Questo apre il contesto per le coroutine
+            logApi("🚀 Avvio aggiornamento globale portafoglio...")
+
+            // Prendiamo la lista attuale
+            val listaCertificati = certificates.value
+
+            listaCertificati.forEachIndexed { index, cert ->
+                logApi("🔄 Aggiornamento ${index + 1}/${listaCertificati.size}: ${cert.isin}")
+
+                // fetchAndUpdatePrice è già una funzione che lancia una coroutine
+                fetchAndUpdatePrice(cert.isin, useBorsaItaliana = true)
+
+                // Il delay deve stare QUI, dentro il lancio della coroutine principale
+                kotlinx.coroutines.delay(2500)
+            }
+            logApi("✅ Aggiornamento globale terminato.")
+        }
+    }
+
+
 }

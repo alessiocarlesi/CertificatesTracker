@@ -27,7 +27,15 @@ interface CertificatesDao {
     @Query("UPDATE certificates SET valautocall = :valautocall WHERE isin = :isin")
     suspend fun updateValAutocall(isin: String, valautocall: String)
 
-    // 🔹 Aggiorna prezzo e timestamp
+    /**
+     * 🔹 AGGIORNAMENTO VALORE CERTIFICATO (Da Scraper Borsa Italiana)
+     */
     @Query("UPDATE certificates SET lastPrice = :price, lastUpdate = :timestamp WHERE isin = :isin")
-    suspend fun updatePriceAndTimestamp(isin: String, price: Double, timestamp: String)
+    suspend fun updateCertificatePrice(isin: String, price: Double, timestamp: String)
+
+    /**
+     * 🔹 AGGIORNAMENTO VALORE SOTTOSTANTE (Da API: ENI, ENEL, ecc.)
+     */
+    @Query("UPDATE certificates SET underlyingPrice = :price, lastUpdate = :timestamp WHERE isin = :isin")
+    suspend fun updateUnderlyingPrice(isin: String, price: Double, timestamp: String)
 }
