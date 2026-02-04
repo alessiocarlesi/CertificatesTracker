@@ -54,7 +54,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
                 cert?.let {
                     val textColor = if (recentlyUpdated[it.isin] == true) Color(0xFF008000) else Color.Black
 
-                    // 🔹 CALCOLI PERCENTUALI: Basati sul prezzo del sottostante (underlyingPrice)
+                    // CALCOLI PERCENTUALI
                     val strikePerc = if (it.strike != 0.0) ((it.underlyingPrice - it.strike) / it.strike * 100) else 0.0
                     val barrierPerc = if (it.barrier != 0.0) ((it.underlyingPrice - it.barrier) / it.barrier * 100) else 0.0
                     val bonusPerc = if (it.bonusLevel != 0.0) ((it.underlyingPrice - it.bonusLevel) / it.bonusLevel * 100) else 0.0
@@ -63,7 +63,6 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
                     Text(
                         text = buildString {
                             append("ISIN: ${it.isin} (${it.lastUpdate ?: "-"})\n")
-                            // 🔹 Visualizzazione Sdoppiata
                             append("Valore Mercato: ${it.lastPrice} EUR\n")
                             append("Sottostante: ${it.underlyingName} - Prezzo: ${it.underlyingPrice} EUR\n")
                             append("Quantità: ${it.quantity}")
@@ -164,17 +163,14 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
 
             Spacer(modifier = Modifier.height(30.dp))
 
-// Sostituisci il vecchio pulsante "AGGIORNA TUTTO" con questo:
             Button(
                 onClick = { viewModel.updateAllCertificates() },
                 modifier = Modifier.fillMaxWidth().height(60.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF32CD32),
-                    contentColor = Color.White
-                )
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF32CD32), contentColor = Color.White)
             ) {
                 Text("🔄 AGGIORNA TUTTO (Borsa IT)", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
             }
+
             Spacer(modifier = Modifier.height(10.dp))
 
             Button(
@@ -205,10 +201,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
                     Text("BONUS PROSSIMI MESI", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
                     Spacer(modifier = Modifier.height(8.dp))
                     for (i in monthlyBonuses.monthNames.indices) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(monthlyBonuses.monthNames[i], fontWeight = FontWeight.Bold)
                             Text("${monthlyBonuses.bonuses[i].format2(2)} €", fontWeight = FontWeight.Bold, color = Color(0xFF005A9C))
                         }
@@ -224,20 +217,14 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFADD8E6), contentColor = Color.Black)
             ) { Text("📡 Log API", fontSize = 20.sp) }
 
-            // 🔹 AGGIUNGI QUESTO PEZZO QUI SOTTO:
             Spacer(modifier = Modifier.height(30.dp))
 
             val context = androidx.compose.ui.platform.LocalContext.current
 
             Button(
                 onClick = { viewModel.avviaEsportazione(context) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(55.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF455A64), // Grigio fumo, elegante e discreto
-                    contentColor = Color.White
-                ),
+                modifier = Modifier.fillMaxWidth().height(55.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF455A64), contentColor = Color.White),
                 shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
             ) {
                 Text("💾 ESPORTA DATABASE (BACKUP)", fontSize = 16.sp, fontWeight = FontWeight.Bold)
@@ -251,6 +238,20 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
                 color = Color.Gray
             )
 
+            // --- POSIZIONE CORRETTA: ULTIMO PULSANTE DELLA COLUMN ---
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Button(
+                onClick = { viewModel.updateAllUnderlyings() },
+                modifier = Modifier.fillMaxWidth().height(60.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2), contentColor = Color.White),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
+            ) {
+                Text("🔄 ", fontSize = 18.sp)
+                Text("AGGIORNA SOTTOSTANTI (Yahoo)", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            }
+
+            Spacer(modifier = Modifier.height(40.dp))
         }
     }
 

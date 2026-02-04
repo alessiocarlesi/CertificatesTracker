@@ -253,4 +253,39 @@ class CertificatesViewModel(
             logApi(messaggio)
         }
     }
+
+    fun updateAllUnderlyings() {
+        viewModelScope.launch {
+            logApi("🚀 START: Aggiornamento globale Yahoo Finance")
+
+            val listaCertificati = certificates.value
+
+            // Estraiamo solo i ticker univoci per non fare chiamate doppie
+            val tickerUnici = listaCertificati.map { it.underlyingName.trim() }.distinct()
+
+            tickerUnici.forEachIndexed { index, symbol ->
+                logApi("🔄 [${index + 1}/${tickerUnici.size}] Richiesta Yahoo per $symbol")
+
+                val prezzoYahoo = YahooFinanceFetcher.getPrice(symbol)
+
+                if (prezzoYahoo != null) {
+                    val now = formatter.format(Date())
+                    val roundedPrice = (kotlin.math.round(prezzoYahoo * 100) / 100.0)
+
+                    // Aggiorniamo TUTTI i certificati che hanno questo sottostante
+                    listaCertificati.filter { it.underlyingName.trim() == symbol }.forEach { cert ->
+                        dao.updateUnderlyingPrice(cert.isin, roundedPrice, now)
+                    }
+
+                    logApi("📈 $symbol aggiornato: €$roundedPrice")
+                } else {
+                    logApi("⚠️ $symbol: Non trovato")
+                }
+
+                // Delay ridotto perché facciamo meno chiamate
+                kotlinx.coroutines.delay(1000)
+            }
+            logApi("🏁 FINE: Sottostanti aggiornati.")
+        }
+    }
 }
