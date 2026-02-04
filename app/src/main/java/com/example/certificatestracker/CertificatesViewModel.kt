@@ -8,6 +8,7 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 import androidx.compose.runtime.mutableStateListOf
+import android.content.Context
 
 class CertificatesViewModel(
     private val dao: CertificatesDao,
@@ -96,21 +97,33 @@ class CertificatesViewModel(
             } else {
                 logApi("🔹 API Sottostante per $symbol ($isin)")
 
-                val provider = when {
-                    symbol.endsWith(".MI", ignoreCase = true) -> ApiProvider.MARKETSTACK
-                    symbol.contains(".") -> ApiProvider.ALPHAVANTAGE
-                    else -> ApiProvider.TWELVEDATA
-                }
+                // 1. TENTATIVO PRIORITARIO: Yahoo Finance (Gratis e senza limiti)
+                logApi("🔍 Tentativo Yahoo Finance per $symbol...")
+                val yahooPrice = YahooFinanceFetcher.getPrice(symbol)
 
-                logApi("⚙️ Provider: ${provider.displayName}")
+                if (yahooPrice != null) {
+                    // Se Yahoo ha successo, saltiamo tutto il resto
+                    handleFetchResult(FetchResult.Success(yahooPrice), isin, now, ApiProvider.YAHOO)
+                } else {
+                    // 2. FALLBACK: Se Yahoo fallisce, torniamo alla logica originale
+                    logApi("⚠️ Yahoo non trovato. Utilizzo fallback...")
 
-                val result = when (provider) {
-                    ApiProvider.TWELVEDATA -> TwelveDataFetcher.fetchLatestClose(symbol, ApiKeys.TWELVEDATA)
-                    ApiProvider.MARKETSTACK -> MarketstackFetcher.fetchLatestClose(symbol, ApiKeys.MARKETSTACK)
-                    ApiProvider.ALPHAVANTAGE -> AlphaVantageFetcher.fetchLatestClose(symbol, ApiKeys.ALPHAVANTAGE)
-                    else -> FetchResult.Error("Provider non configurato")
+                    val provider = when {
+                        symbol.endsWith(".MI", ignoreCase = true) -> ApiProvider.MARKETSTACK
+                        symbol.contains(".") -> ApiProvider.ALPHAVANTAGE
+                        else -> ApiProvider.TWELVEDATA
+                    }
+
+                    logApi("⚙️ Provider Fallback: ${provider.displayName}")
+
+                    val result = when (provider) {
+                        ApiProvider.TWELVEDATA -> TwelveDataFetcher.fetchLatestClose(symbol, ApiKeys.TWELVEDATA)
+                        ApiProvider.MARKETSTACK -> MarketstackFetcher.fetchLatestClose(symbol, ApiKeys.MARKETSTACK)
+                        ApiProvider.ALPHAVANTAGE -> AlphaVantageFetcher.fetchLatestClose(symbol, ApiKeys.ALPHAVANTAGE)
+                        else -> FetchResult.Error("Provider non configurato")
+                    }
+                    handleFetchResult(result, isin, now, provider)
                 }
-                handleFetchResult(result, isin, now, provider)
             }
         }
     }
@@ -143,26 +156,35 @@ class CertificatesViewModel(
     private fun incrementApiUsage(providerName: String) {
         viewModelScope.launch {
             val usage = apiUsageDao.get(providerName)
-            val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-            val currentTimestamp = formatter.format(Date())
+            val now = Calendar.getInstance()
+
+            // Formati per il confronto
+            val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(now.time)
+            val currentMonth = SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(now.time)
+            val currentTimestamp = formatter.format(now.time)
 
             if (usage != null) {
+                // 1. Controllo Giorno: reset se la data è diversa
                 val isNewDay = !usage.lastUpdated.startsWith(todayDate)
                 val newDailyCount = if (isNewDay) 1 else usage.dailyCount + 1
+
+                // 2. Controllo Mese: reset se l'anno-mese è diverso
+                val isNewMonth = !usage.lastUpdated.startsWith(currentMonth)
+                val newMonthlyCount = if (isNewMonth) 1 else usage.monthlyCount + 1
 
                 apiUsageDao.insert(
                     usage.copy(
                         dailyCount = newDailyCount,
-                        monthlyCount = usage.monthlyCount + 1,
+                        monthlyCount = newMonthlyCount,
                         lastUpdated = currentTimestamp
                     )
                 )
             } else {
+                // Primo inserimento assoluto
                 apiUsageDao.insert(ApiUsage(providerName, 1, 1, currentTimestamp))
             }
         }
     }
-
     // --- Gestione Date Bonus/Autocall ---
     fun updateDatesIfNeeded(cert: Certificate): Certificate {
         var updatedNextbonus = cert.nextbonus
@@ -222,5 +244,13 @@ class CertificatesViewModel(
         }
     }
 
-
+    // Aggiungi questo metodo dentro la classe CertificatesViewModel
+    fun avviaEsportazione(context: Context) {
+        viewModelScope.launch {
+            // Chiamiamo la subroutine esterna DatabaseManager
+            val messaggio = DatabaseManager.exportDatabase(context)
+            // Usiamo la tua funzione di log per mostrare l'esito all'utente
+            logApi(messaggio)
+        }
+    }
 }

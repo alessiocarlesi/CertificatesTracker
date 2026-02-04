@@ -9,7 +9,9 @@ enum class ApiProvider(
     MARKETSTACK("Marketstack", dailyLimit = 200, monthlyLimit = 200),
     ALPHAVANTAGE("Alpha Vantage", dailyLimit = 25, monthlyLimit = 775),
 
+    // 🔹 Aggiunto per Yahoo Finance (Gratuito)
+    YAHOO("Yahoo Finance", dailyLimit = 999999, monthlyLimit = 999999),
+
     // Aggiunto per lo scraping di Borsa Italiana
-    // Usiamo limiti simbolici alti perché non è un servizio API a consumo
     BORSA_ITALIANA("Borsa Italiana", dailyLimit = 999999, monthlyLimit = 999999)
 }

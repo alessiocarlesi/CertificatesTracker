@@ -223,6 +223,34 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
                 modifier = Modifier.fillMaxWidth().height(50.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFADD8E6), contentColor = Color.Black)
             ) { Text("📡 Log API", fontSize = 20.sp) }
+
+            // 🔹 AGGIUNGI QUESTO PEZZO QUI SOTTO:
+            Spacer(modifier = Modifier.height(30.dp))
+
+            val context = androidx.compose.ui.platform.LocalContext.current
+
+            Button(
+                onClick = { viewModel.avviaEsportazione(context) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(55.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF455A64), // Grigio fumo, elegante e discreto
+                    contentColor = Color.White
+                ),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
+            ) {
+                Text("💾 ESPORTA DATABASE (BACKUP)", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+
+            Text(
+                text = "Il file backup_certificates_v12.db sarà salvato nei Download",
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 20.dp),
+                textAlign = TextAlign.Center,
+                fontSize = 11.sp,
+                color = Color.Gray
+            )
+
         }
     }
 
