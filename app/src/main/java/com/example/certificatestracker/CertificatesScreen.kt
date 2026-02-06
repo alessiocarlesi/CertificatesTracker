@@ -54,25 +54,51 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
                 cert?.let {
                     val textColor = if (recentlyUpdated[it.isin] == true) Color(0xFF008000) else Color.Black
 
-                    // CALCOLI PERCENTUALI
-                    val strikePerc = if (it.strike != 0.0) ((it.underlyingPrice - it.strike) / it.strike * 100) else 0.0
-                    val barrierPerc = if (it.barrier != 0.0) ((it.underlyingPrice - it.barrier) / it.barrier * 100) else 0.0
-                    val bonusPerc = if (it.bonusLevel != 0.0) ((it.underlyingPrice - it.bonusLevel) / it.bonusLevel * 100) else 0.0
-                    val autocallPerc = if (it.autocallLevel != 0.0) ((it.underlyingPrice - it.autocallLevel) / it.autocallLevel * 100) else 0.0
+                    // 🛠️ LOGICA WORST-OF DINAMICA (v13)
+                    val sottostanti = listOf(
+                        it.und1 to it.und1Strike,
+                        it.und2 to it.und2Strike,
+                        it.und3 to it.und3Strike,
+                        it.und4 to it.und4Strike,
+                        it.und5 to it.und5Strike,
+                        it.und6 to it.und6Strike
+                    ).filter { pair -> !pair.first.isNullOrBlank() && pair.second > 0.0 }
+
+                    // Calcoliamo la performance per ogni titolo nel paniere
+                    val worstOf = sottostanti.map { (ticker, strike) ->
+                        // Recuperiamo l'ultimo prezzo salvato per quel ticker specifico
+                        val currentPrice = viewModel.getLastKnownPrice(ticker!!)
+                        val perf = if (strike > 0) ((currentPrice - strike) / strike * 100) else 0.0
+                        Triple(ticker, currentPrice, perf)
+                    }.minByOrNull { it.third } ?: Triple(it.underlyingName, it.underlyingPrice, 0.0)
+
+                    val worstTicker = worstOf.first
+                    val worstPrice = worstOf.second
+                    val worstPerf = worstOf.third
+
+                    // 🛠️ CALCOLO DISTANZE DALLE SOGLIE PERCENTUALI
+                    // (Performance Worst-Of) - (Soglia desiderata - 100)
+                    val distBarrier = worstPerf - (it.barrierPerc - 100)
+                    val distBonus = worstPerf - (it.bonusPerc - 100)
+                    val distAutocall = worstPerf - (it.autocallPerc - 100)
 
                     Text(
                         text = buildString {
                             append("ISIN: ${it.isin} (${it.lastUpdate ?: "-"})\n")
-                            append("Valore Mercato: ${it.lastPrice} EUR\n")
-                            append("Sottostante: ${it.underlyingName} - Prezzo: ${it.underlyingPrice} EUR\n")
+                            append("Valore Mercato: ${it.lastPrice} EUR\n\n")
+
+                            append("🏆 WORST-OF: $worstTicker\n")
+                            append("Prezzo: $worstPrice EUR (${worstPerf.format(1)}% dallo Strike)\n")
                             append("Quantità: ${it.quantity}")
-                            if (it.purchasePrice != null) {
-                                append("  Costo: €${it.purchasePrice}")
-                            }
-                            append("\nStrike: ${it.strike} (${strikePerc.format(1)}%)\n")
-                            append("Barrier: ${it.barrier} (${barrierPerc.format(1)}%)\n")
-                            append("Bonus: ${it.bonusLevel} (${bonusPerc.format(1)}%) - ${(it.premio * it.quantity).format2(2)} € - il: ${it.nextbonus}\n")
-                            append("Autocall: ${it.autocallLevel} (${autocallPerc.format(1)}%) - Valutazione: ${it.valautocall}")
+                            if (it.purchasePrice != null) append("  Costo: €${it.purchasePrice}")
+
+                            append("\n\nDISTANZA DALLE SOGLIE (%):\n")
+                            append("Barriera (${it.barrierPerc}%): ${distBarrier.format(1)}%\n")
+                            append("Bonus (${it.bonusPerc}%): ${distBonus.format(1)}%\n")
+                            append("Autocall (${it.autocallPerc}%): ${distAutocall.format(1)}%\n\n")
+
+                            append("Cedola: ${(it.premio * it.quantity).format2(2)} € - il: ${it.nextbonus}\n")
+                            append("Valutazione Autocall: ${it.valautocall}")
                         },
                         color = textColor,
                         fontSize = 14.sp,
@@ -238,7 +264,6 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
                 color = Color.Gray
             )
 
-            // --- POSIZIONE CORRETTA: ULTIMO PULSANTE DELLA COLUMN ---
             Spacer(modifier = Modifier.height(10.dp))
 
             Button(
