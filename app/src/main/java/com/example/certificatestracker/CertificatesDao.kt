@@ -39,3 +39,18 @@ interface CertificatesDao {
     @Query("UPDATE certificates SET underlyingPrice = :price, lastUpdate = :timestamp WHERE isin = :isin")
     suspend fun updateUnderlyingPrice(isin: String, price: Double, timestamp: String)
 }
+
+/**
+ * 🔹 NUOVO DAO VERSION 14: Gestione persistente prezzi sottostanti
+ */
+@Dao
+interface UnderlyingPriceDao {
+    @Query("SELECT * FROM underlying_prices")
+    suspend fun getAll(): List<UnderlyingPrice>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrUpdate(underlying: UnderlyingPrice)
+
+    @Query("SELECT * FROM underlying_prices WHERE ticker = :ticker LIMIT 1")
+    suspend fun getByTicker(ticker: String): UnderlyingPrice?
+}

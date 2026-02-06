@@ -14,13 +14,14 @@ import android.content.Context
 class CertificatesViewModel(
     private val dao: CertificatesDao,
     private val apiUsageDao: ApiUsageDao,
-    private val insertionDao: CertificateInsertionDao
+    private val insertionDao: CertificateInsertionDao,
+    private val underlyingPriceDao: UnderlyingPriceDao // 🔹 1. Iniettiamo il nuovo DAO v14
 ) : ViewModel() {
 
     private val _apiLogs = mutableStateListOf<String>()
     val apiLogs: List<String> get() = _apiLogs
 
-    // 🔹 1. MAPPA PREZZI IN RAM (Per calcolo Worst-Of istantaneo)
+    // Mappa in RAM per i calcoli UI istantanei
     private val lastPricesMap = mutableStateMapOf<String, Double>()
 
     private fun logApi(message: String) {
@@ -42,9 +43,22 @@ class CertificatesViewModel(
 
     init {
         refreshInsertionDates()
+        caricaPrezziDalDatabase() // 🔹 2. All'avvio, recuperiamo i prezzi persistenti
     }
 
-    // 🔹 2. FUNZIONE PER LO SCREEN: Risolve l'errore del calcolo Worst-Of
+    // 🔹 3. Caricamento Offline: Riempiamo la mappa RAM dai dati del DB v14
+    private fun caricaPrezziDalDatabase() {
+        viewModelScope.launch {
+            val prezziSalvati = underlyingPriceDao.getAll()
+            prezziSalvati.forEach {
+                lastPricesMap[it.ticker] = it.price
+            }
+            if (prezziSalvati.isNotEmpty()) {
+                logApi("📦 Caricati ${prezziSalvati.size} sottostanti dal database.")
+            }
+        }
+    }
+
     fun getLastKnownPrice(ticker: String): Double {
         return lastPricesMap[ticker] ?: 0.0
     }
@@ -106,7 +120,6 @@ class CertificatesViewModel(
                     handleFetchResult(FetchResult.Success(yahooPrice), isin, now, ApiProvider.YAHOO)
                 } else {
                     logApi("⚠️ Yahoo non trovato. Utilizzo fallback...")
-                    // Logica fallback omessa per brevità
                 }
             }
         }
@@ -124,8 +137,13 @@ class CertificatesViewModel(
                     } else {
                         dao.updateUnderlyingPrice(isin, roundedPrice, now)
                         val cert = certificates.value.find { it.isin == isin }
-                        val ticker = cert?.und1 ?: cert?.underlyingName
-                        ticker?.let { lastPricesMap[it] = roundedPrice }
+                        val ticker = (cert?.und1 ?: cert?.underlyingName)?.trim()
+
+                        ticker?.let {
+                            lastPricesMap[it] = roundedPrice
+                            // 🔹 4. Salviamo il prezzo nel DB v14 per l'uso futuro
+                            underlyingPriceDao.insertOrUpdate(UnderlyingPrice(it, roundedPrice, now))
+                        }
                         incrementApiUsage(provider.displayName)
                     }
                 }
@@ -157,11 +175,11 @@ class CertificatesViewModel(
     }
 
     /**
-     * 🚀 AGGIORNAMENTO GLOBALE v13: Scansiona tutti i 6 slot di ogni certificato
+     * 🚀 AGGIORNAMENTO GLOBALE v14: Scansiona i 6 slot e salva tutto nel DB
      */
     fun updateAllUnderlyings() {
         viewModelScope.launch {
-            logApi("🚀 START: Aggiornamento globale Yahoo Finance (v13)")
+            logApi("🚀 START: Aggiornamento globale Yahoo Finance (v14)")
             val listaCertificati = certificates.value
 
             val tickerUnici = listaCertificati.flatMap { cert ->
@@ -175,11 +193,18 @@ class CertificatesViewModel(
                 if (prezzoYahoo != null) {
                     val now = formatter.format(Date())
                     val roundedPrice = (kotlin.math.round(prezzoYahoo * 100) / 100.0)
+
+                    // RAM
                     lastPricesMap[symbol] = roundedPrice
+
+                    // DATABASE PREZZI v14
+                    underlyingPriceDao.insertOrUpdate(UnderlyingPrice(symbol, roundedPrice, now))
+
+                    // DATABASE CERTIFICATI (und1/underlyingPrice per compatibilità)
                     listaCertificati.filter { (it.und1 ?: it.underlyingName).trim() == symbol }.forEach { cert ->
                         dao.updateUnderlyingPrice(cert.isin, roundedPrice, now)
                     }
-                    logApi("📈 $symbol aggiornato: €$roundedPrice")
+                    logApi("📈 $symbol aggiornato e salvato: €$roundedPrice")
                 } else {
                     logApi("⚠️ $symbol: Non trovato")
                 }
