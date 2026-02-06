@@ -6,8 +6,8 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "certificates")
 data class Certificate(
     @PrimaryKey val isin: String,
-    val underlyingName: String,
-    val strike: Double = 0.0,
+    val underlyingName: String, // Vecchio campo (mantenuto per compatibilità migrazione)
+    val strike: Double = 0.0,      // Vecchio campo (mantenuto per compatibilità migrazione)
     val barrier: Double = 0.0,
     val bonusLevel: Double = 0.0,
     val bonusMonths: Int = 0,
@@ -17,13 +17,22 @@ data class Certificate(
     val nextbonus: String = "",
     val valautocall: String = "",
 
-    // 🔹 VALORE DEL CERTIFICATO (da Borsa Italiana)
     val lastPrice: Double = 0.0,
-
-    // 🔹 VALORE DEL SOTTOSTANTE (da API: ENI, ENEL, ecc.)
     val underlyingPrice: Double = 0.0,
-
     val lastUpdate: String? = null,
     val quantity: Int = 0,
-    val purchasePrice: Double? = null
+    val purchasePrice: Double? = null,
+
+    // 🔹 NUOVI CAMPI VERSION 13: I 6 SOTTOSTANTI
+    val und1: String? = null, val und1Strike: Double = 0.0,
+    val und2: String? = null, val und2Strike: Double = 0.0,
+    val und3: String? = null, val und3Strike: Double = 0.0,
+    val und4: String? = null, val und4Strike: Double = 0.0,
+    val und5: String? = null, val und5Strike: Double = 0.0,
+    val und6: String? = null, val und6Strike: Double = 0.0,
+
+    // 🔹 NUOVI CAMPI VERSION 13: PERCENTUALI UNICHE
+    val barrierPerc: Double = 0.0,
+    val bonusPerc: Double = 0.0,
+    val autocallPerc: Double = 0.0
 )
