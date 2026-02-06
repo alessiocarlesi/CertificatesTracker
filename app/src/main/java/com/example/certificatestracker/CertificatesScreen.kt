@@ -214,11 +214,13 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
             ) { Text("📊 Vedi Riepilogo Bonus", fontSize = 20.sp) }
 
             Spacer(modifier = Modifier.height(20.dp))
-
             val monthlyBonuses = remember(certificatesFlow, insertionDates) {
-                MonthlyBonusCalculator.calculate(certificatesFlow, insertionDates)
+                MonthlyBonusCalculator.calculate(
+                    certificates = certificatesFlow,
+                    insertionDates = insertionDates,
+                    viewModel = viewModel // 🔹 Questo è il parametro che risolve l'errore
+                )
             }
-
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F8FF))

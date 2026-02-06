@@ -18,11 +18,14 @@ fun MonthlySummaryScreen(viewModel: CertificatesViewModel) {
     val certificates by viewModel.certificates.collectAsState()
     val insertionDates by viewModel.insertionDates.collectAsState()
 
-    // Subroutine Calcolo Bonus (Dettagliato)
+// 🔹 Subroutine Calcolo Bonus (Dettagliato) - Aggiornato con viewModel
     val (monthNames, perIsinBonuses, totalBonuses, virtualBonuses) = remember(certificates, insertionDates) {
-        MonthlyBonusCalculator.calculateDetailed(certificates, insertionDates)
+        MonthlyBonusCalculator.calculateDetailed(
+            certificates = certificates,
+            insertionDates = insertionDates,
+            viewModel = viewModel // ⬅️ Aggiungi questo parametro
+        )
     }
-
     // Subroutine Calcolo Capitale (ALU per il capitale investito)
     val stats = remember(certificates) {
         PortfolioCalculators.compute(certificates)
@@ -76,7 +79,10 @@ fun MonthlySummaryScreen(viewModel: CertificatesViewModel) {
             // --- RIGHE ISIN CON DISTANZA AUTOCALL (Logica 3 Colori) ---
             items(perIsinBonuses.entries.toList()) { (isin, values) ->
                 val cert = certificates.find { it.isin == isin }
-                val distAutocall = cert?.let { PortfolioCalculators.calcolaDistanzaAutocall(it) } ?: 0.0
+                // Nel MonthlySummaryScreen.kt, cambia la riga della distanza:
+                val distAutocall = cert?.let {
+                    PortfolioCalculators.calcolaDistanzaAutocall(it, viewModel) // 🔹 Passa il viewModel qui
+                } ?: 0.0
 
                 // Logica colore strategica
                 val coloreAutocall = when {

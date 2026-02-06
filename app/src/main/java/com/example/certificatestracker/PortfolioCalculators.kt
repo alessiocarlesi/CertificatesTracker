@@ -1,6 +1,6 @@
 package com.example.certificatestracker
 
-// Struttura fissa per i risultati dei calcoli (Registri di Output)
+// Struttura fissa per i risultati dei calcoli
 data class PortfolioStats(
     val capitaleInvestito: Double = 0.0,
     val valoreAttuale: Double = 0.0,
@@ -11,16 +11,14 @@ data class PortfolioStats(
 object PortfolioCalculators {
 
     /**
-     * Calcola i totali del portafoglio basandosi sui 19.000€ investiti e i prezzi correnti
+     * Calcola i totali del portafoglio (Invariato, usa lastPrice del certificato)
      */
     fun compute(certificates: List<Certificate>): PortfolioStats {
         var investito = 0.0
         var attuale = 0.0
 
         certificates.forEach { cert ->
-            // Accumulo quantità * prezzo acquisto (dal DB v12)
             investito += (cert.purchasePrice ?: 0.0) * cert.quantity
-            // Accumulo quantità * ultimo prezzo certificato (da Borsa IT)
             attuale += cert.lastPrice * cert.quantity
         }
 
@@ -31,27 +29,37 @@ object PortfolioCalculators {
     }
 
     /**
-     * Calcola la distanza tra il sottostante e la soglia di rimborso anticipato
+     * 🚀 NUOVA LOGICA v13: Calcola la distanza del Worst-Of dalla soglia % Autocall
      */
-    fun calcolaDistanzaAutocall(cert: Certificate): Double {
-        // Se mancano i dati, restituiamo 0 per non sporcare la tabella
-        if (cert.autocallLevel <= 0.0 || cert.underlyingPrice <= 0.0) return 0.0
+    fun calcolaDistanzaAutocall(cert: Certificate, viewModel: CertificatesViewModel): Double {
+        // 1. Raccogliamo i sottostanti attivi
+        val sottostanti = listOf(
+            cert.und1 to cert.und1Strike,
+            cert.und2 to cert.und2Strike,
+            cert.und3 to cert.und3Strike,
+            cert.und4 to cert.und4Strike,
+            cert.und5 to cert.und5Strike,
+            cert.und6 to cert.und6Strike
+        ).filter { !it.first.isNullOrBlank() && it.second > 0.0 }
 
-        // Calcolo percentuale: (Prezzo attuale - Soglia) / Soglia * 100
-        return ((cert.underlyingPrice - cert.autocallLevel) / cert.autocallLevel) * 100
+        if (sottostanti.isEmpty()) return 0.0
+
+        // 2. Troviamo la performance del peggiore nel paniere
+        val worstPerf = sottostanti.map { (ticker, strike) ->
+            val currentPrice = viewModel.getLastKnownPrice(ticker!!)
+            if (strike > 0.0) ((currentPrice - strike) / strike * 100.0) else -100.0
+        }.minByOrNull { it } ?: 0.0
+
+        // 3. Distanza = (Perf. Attuale) - (Soglia Autocall % - 100)
+        // Esempio: Perf -5%, Soglia 100% (0%). Distanza = -5 - 0 = -5%
+        return worstPerf - (cert.autocallPerc - 100.0)
     }
 
-    /**
-     * Calcola il rendimento percentuale mensile
-     */
     fun calcolaYieldMensile(bonusMensile: Double, capitaleInvestito: Double): Double {
         if (capitaleInvestito <= 0.0) return 0.0
         return (bonusMensile / capitaleInvestito) * 100
     }
 
-    /**
-     * Calcola il rendimento annualizzato basato su un mese
-     */
     fun calcolaYieldAnnuo(yieldMensile: Double): Double {
         return yieldMensile * 12
     }

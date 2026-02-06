@@ -88,7 +88,6 @@ class CertificatesViewModel(
     fun fetchAndUpdatePrice(isin: String, useBorsaItaliana: Boolean = true) {
         viewModelScope.launch {
             val cert = certificates.value.find { it.isin == isin } ?: return@launch
-            // Per compatibilità usiamo und1 se presente, altrimenti il vecchio campo
             val symbol = (cert.und1 ?: cert.underlyingName).trim()
             val now = formatter.format(Date())
 
@@ -107,7 +106,7 @@ class CertificatesViewModel(
                     handleFetchResult(FetchResult.Success(yahooPrice), isin, now, ApiProvider.YAHOO)
                 } else {
                     logApi("⚠️ Yahoo non trovato. Utilizzo fallback...")
-                    // Logica fallback (Marketstack, ecc.) omessa per brevità ma gestita come prima
+                    // Logica fallback omessa per brevità
                 }
             }
         }
@@ -124,12 +123,9 @@ class CertificatesViewModel(
                         dao.updateCertificatePrice(isin, roundedPrice, now)
                     } else {
                         dao.updateUnderlyingPrice(isin, roundedPrice, now)
-
-                        // Aggiorniamo la mappa per il Worst-Of istantaneo
                         val cert = certificates.value.find { it.isin == isin }
                         val ticker = cert?.und1 ?: cert?.underlyingName
                         ticker?.let { lastPricesMap[it] = roundedPrice }
-
                         incrementApiUsage(provider.displayName)
                     }
                 }
@@ -168,7 +164,6 @@ class CertificatesViewModel(
             logApi("🚀 START: Aggiornamento globale Yahoo Finance (v13)")
             val listaCertificati = certificates.value
 
-            // Raccogliamo ogni ticker non nullo da tutti e 6 gli slot disponibili
             val tickerUnici = listaCertificati.flatMap { cert ->
                 listOfNotNull(cert.und1, cert.und2, cert.und3, cert.und4, cert.und5, cert.und6)
             }.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
@@ -180,11 +175,7 @@ class CertificatesViewModel(
                 if (prezzoYahoo != null) {
                     val now = formatter.format(Date())
                     val roundedPrice = (kotlin.math.round(prezzoYahoo * 100) / 100.0)
-
-                    // 1. Aggiorniamo la mappa in RAM per il calcolo Worst-Of dello screen
                     lastPricesMap[symbol] = roundedPrice
-
-                    // 2. Persistenza nel DB (per i certificati che hanno questo ticker come und1)
                     listaCertificati.filter { (it.und1 ?: it.underlyingName).trim() == symbol }.forEach { cert ->
                         dao.updateUnderlyingPrice(cert.isin, roundedPrice, now)
                     }
@@ -198,7 +189,6 @@ class CertificatesViewModel(
         }
     }
 
-    // --- Metodi Helper per date ed esportazione (Invariati) ---
     fun updateDatesIfNeeded(cert: Certificate): Certificate {
         var updatedNext = cert.nextbonus
         var updatedAutocall = cert.valautocall
@@ -242,41 +232,6 @@ class CertificatesViewModel(
     fun avviaEsportazione(context: Context) {
         viewModelScope.launch {
             logApi(DatabaseManager.exportDatabase(context))
-        }
-    }
-
-    fun updateAllUnderlyings() {
-        viewModelScope.launch {
-            logApi("🚀 START: Aggiornamento globale Yahoo Finance")
-
-            val listaCertificati = certificates.value
-
-            // Estraiamo solo i ticker univoci per non fare chiamate doppie
-            val tickerUnici = listaCertificati.map { it.underlyingName.trim() }.distinct()
-
-            tickerUnici.forEachIndexed { index, symbol ->
-                logApi("🔄 [${index + 1}/${tickerUnici.size}] Richiesta Yahoo per $symbol")
-
-                val prezzoYahoo = YahooFinanceFetcher.getPrice(symbol)
-
-                if (prezzoYahoo != null) {
-                    val now = formatter.format(Date())
-                    val roundedPrice = (kotlin.math.round(prezzoYahoo * 100) / 100.0)
-
-                    // Aggiorniamo TUTTI i certificati che hanno questo sottostante
-                    listaCertificati.filter { it.underlyingName.trim() == symbol }.forEach { cert ->
-                        dao.updateUnderlyingPrice(cert.isin, roundedPrice, now)
-                    }
-
-                    logApi("📈 $symbol aggiornato: €$roundedPrice")
-                } else {
-                    logApi("⚠️ $symbol: Non trovato")
-                }
-
-                // Delay ridotto perché facciamo meno chiamate
-                kotlinx.coroutines.delay(1000)
-            }
-            logApi("🏁 FINE: Sottostanti aggiornati.")
         }
     }
 }
