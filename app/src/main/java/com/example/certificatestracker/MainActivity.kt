@@ -1,4 +1,3 @@
-// filename: app/src/main/java/com/example/certificatestracker/MainActivity.kt
 package com.example.certificatestracker
 
 import android.os.Bundle
@@ -17,32 +16,30 @@ class MainActivity : ComponentActivity() {
     private lateinit var dao: CertificatesDao
     private lateinit var apiUsageDao: ApiUsageDao
     private lateinit var insertionDao: CertificateInsertionDao
-    private lateinit var underlyingPriceDao: UnderlyingPriceDao // 🔹 DAO per prezzi persistenti v14
+    private lateinit var underlyingPriceDao: UnderlyingPriceDao
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 1. Inizializzazione Database Certificati e Sottostanti
-        // Ora safeDb gestisce sia CertificatesDao che UnderlyingPriceDao
+        // 1. Inizializzazione Database Certificati e Sottostanti (v14)
         val safeDb = CertificatesDatabase.getDatabase(applicationContext)
         dao = safeDb.certificatesDao()
-        underlyingPriceDao = safeDb.underlyingPriceDao() // 🔹 Recupero istanza DAO v14
+        underlyingPriceDao = safeDb.underlyingPriceDao()
 
         // 2. Inizializzazione Database Utilizzo API
         apiUsageDao = ApiUsageDatabase.getDatabase(applicationContext).apiUsageDao()
 
-        // 3. Inizializzazione Database Inserzioni (Date di acquisto separate)
+        // 3. Inizializzazione Database Inserzioni
         val insertionDb = InsertionDatabase.getDatabase(applicationContext)
         insertionDao = insertionDb.insertionDao()
 
-        // 4. Creazione ViewModel tramite Factory aggiornata con 4 parametri
-        // Passiamo tutti i motori necessari al ViewModel per funzionare offline
+        // 4. Creazione ViewModel (Istanza UNICA per tutta l'app)
         certificatesViewModel = ViewModelProvider(
             this,
-            CertificatesViewModelFactory(dao, apiUsageDao, insertionDao, underlyingPriceDao) // 🔹 Quarto parametro aggiunto
+            CertificatesViewModelFactory(dao, apiUsageDao, insertionDao, underlyingPriceDao)
         )[CertificatesViewModel::class.java]
 
-        // UI
+        // 5. Interfaccia UI - Passiamo il ViewModel alla navigazione
         setContent {
             MaterialTheme {
                 Surface {
@@ -51,20 +48,21 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Caricamento iniziale e aggiornamento prezzi
+        // 6. Caricamento iniziale e aggiornamento prezzi all'avvio
         CoroutineScope(Dispatchers.Main).launch {
-            // Sincronizziamo le date di inserimento prima di aggiornare i prezzi
+            // Sincronizziamo le date per i calcoli dei bonus
             certificatesViewModel.refreshInsertionDates()
 
-            // NOTA: Con la v14, i prezzi sottostanti vengono caricati automaticamente
-            // nell'init del ViewModel dal database. Facciamo comunque un aggiornamento
-            // per avere le quotazioni dell'ultimo minuto.
-            certificatesViewModel.certificates.value.forEach { cert ->
-                certificatesViewModel.fetchAndUpdatePrice(cert.isin)
+            // Aggiornamento automatico dei prezzi per popolare i log all'avvio
+            val lista = certificatesViewModel.certificates.value
+            if (lista.isNotEmpty()) {
+                lista.forEach { cert ->
+                    certificatesViewModel.fetchAndUpdatePrice(cert.isin)
+                }
             }
         }
 
-        // Backup automatico del database principale
+        // 7. Backup automatico
         DatabaseBackupHelper.backupDatabase(this)
     }
 }

@@ -15,12 +15,18 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.navigation.NavController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.*
 
 @Composable
 fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavController) {
     val certificatesFlow by viewModel.certificates.collectAsState(initial = emptyList())
     val apiUsages by viewModel.apiUsages.collectAsState(initial = emptyList())
     val insertionDates by viewModel.insertionDates.collectAsState()
+
+    // 🔹 Sensori dal ViewModel per il LED e lo Stato
+    val lastOpFailed by viewModel.lastOperationFailed.collectAsState()
+    val lastSyncTime by viewModel.lastSyncTime.collectAsState()
 
     var currentIndex by remember { mutableStateOf(0) }
     var showEditScreen by remember { mutableStateOf(false) }
@@ -30,6 +36,22 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
     val recentlyUpdated = remember { mutableStateMapOf<String, Boolean>() }
     val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
+
+    // 🟢 Logica Colore LED
+    val syncStatusColor = remember(lastSyncTime, lastOpFailed) {
+        if (lastOpFailed) return@remember Color.Magenta // Errore critico
+        if (lastSyncTime == null) return@remember Color.Red
+        try {
+            val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+            val lastDate = sdf.parse(lastSyncTime!!)
+            val diffMinutes = (Date().time - lastDate.time) / (1000 * 60)
+            when {
+                diffMinutes < 15 -> Color(0xFF32CD32) // Verde (Fresco)
+                diffMinutes < 240 -> Color(0xFFFFC107) // Giallo (Recente)
+                else -> Color.Red // Rosso (Vecchio)
+            }
+        } catch (e: Exception) { Color.Gray }
+    }
 
     if (showEditScreen) {
         EditCertificateScreen(
@@ -54,7 +76,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
                 cert?.let {
                     val textColor = if (recentlyUpdated[it.isin] == true) Color(0xFF008000) else Color.Black
 
-                    // 🛠️ LOGICA WORST-OF DINAMICA (v13)
+                    // 🛠️ LOGICA WORST-OF DINAMICA
                     val sottostanti = listOf(
                         it.und1 to it.und1Strike,
                         it.und2 to it.und2Strike,
@@ -64,9 +86,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
                         it.und6 to it.und6Strike
                     ).filter { pair -> !pair.first.isNullOrBlank() && pair.second > 0.0 }
 
-                    // Calcoliamo la performance per ogni titolo nel paniere
                     val worstOf = sottostanti.map { (ticker, strike) ->
-                        // Recuperiamo l'ultimo prezzo salvato per quel ticker specifico
                         val currentPrice = viewModel.getLastKnownPrice(ticker!!)
                         val perf = if (strike > 0) ((currentPrice - strike) / strike * 100) else 0.0
                         Triple(ticker, currentPrice, perf)
@@ -76,8 +96,6 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
                     val worstPrice = worstOf.second
                     val worstPerf = worstOf.third
 
-                    // 🛠️ CALCOLO DISTANZE DALLE SOGLIE PERCENTUALI
-                    // (Performance Worst-Of) - (Soglia desiderata - 100)
                     val distBarrier = worstPerf - (it.barrierPerc - 100)
                     val distBonus = worstPerf - (it.bonusPerc - 100)
                     val distAutocall = worstPerf - (it.autocallPerc - 100)
@@ -105,22 +123,9 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
                         fontWeight = FontWeight.Bold
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    apiUsages.forEach { usage ->
-                        val provider = ApiProvider.values().firstOrNull { it.displayName == usage.providerName } ?: return@forEach
-                        val dailyPercent = usage.dailyCount * 100.0 / provider.dailyLimit
-                        val monthlyPercent = usage.monthlyCount * 100.0 / provider.monthlyLimit
-
-                        Text(
-                            text = "${provider.displayName}: Giornaliero ${dailyPercent.format(1)}%, Mensile ${monthlyPercent.format(1)}%",
-                            fontSize = 12.sp,
-                            color = Color.DarkGray
-                        )
-                    }
-
                     Spacer(modifier = Modifier.height(20.dp))
 
+                    // NAVIGAZIONE
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -149,76 +154,22 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
 
                     Spacer(modifier = Modifier.height(20.dp))
 
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    viewModel.fetchAndUpdatePrice(it.isin, useBorsaItaliana = true)
-                                    recentlyUpdated[it.isin] = true
-                                    delay(2000)
-                                    recentlyUpdated[it.isin] = false
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth().height(50.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF90EE90), contentColor = Color.Black)
-                        ) { Text("Aggiorna Quotazione Borsa IT", fontSize = 18.sp) }
-
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    viewModel.fetchAndUpdatePrice(it.isin, useBorsaItaliana = false)
-                                    recentlyUpdated[it.isin] = true
-                                    delay(2000)
-                                    recentlyUpdated[it.isin] = false
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth().height(50.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFADD8E6), contentColor = Color.Black)
-                        ) { Text("Aggiorna Sottostante (API)", fontSize = 18.sp) }
-
-                        Button(
-                            onClick = { selectedCert = it; showEditScreen = true },
-                            modifier = Modifier.fillMaxWidth().height(50.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE6E6FA), contentColor = Color.Black)
-                        ) { Text("Modifica questo ISIN", fontSize = 18.sp) }
-                    }
+                    Button(
+                        onClick = { selectedCert = it; showEditScreen = true },
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE6E6FA), contentColor = Color.Black)
+                    ) { Text("Modifica questo ISIN", fontSize = 18.sp) }
                 }
-            } else {
-                Text("Nessun certificato inserito", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             }
-
-            Spacer(modifier = Modifier.height(30.dp))
-
-            Button(
-                onClick = { viewModel.updateAllCertificates() },
-                modifier = Modifier.fillMaxWidth().height(60.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF32CD32), contentColor = Color.White)
-            ) {
-                Text("🔄 AGGIORNA TUTTO (Borsa IT)", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Button(
-                onClick = { selectedCert = null; showEditScreen = true },
-                modifier = Modifier.fillMaxWidth().height(50.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFADD8E6), contentColor = Color.Black)
-            ) { Text("➕ Aggiungi nuovo certificato", fontSize = 20.sp) }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Button(
-                onClick = { navController.navigate("summary") },
-                modifier = Modifier.fillMaxWidth().height(50.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFADD8E6), contentColor = Color.Black)
-            ) { Text("📊 Vedi Riepilogo Bonus", fontSize = 20.sp) }
 
             Spacer(modifier = Modifier.height(20.dp))
+
+            // BONUS PROSSIMI MESI
             val monthlyBonuses = remember(certificatesFlow, insertionDates) {
                 MonthlyBonusCalculator.calculate(
                     certificates = certificatesFlow,
                     insertionDates = insertionDates,
-                    viewModel = viewModel // 🔹 Questo è il parametro che risolve l'errore
+                    viewModel = viewModel
                 )
             }
             Card(
@@ -237,18 +188,95 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
                 }
             }
 
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // PULSANTI NAVIGAZIONE
+            Button(
+                onClick = { selectedCert = null; showEditScreen = true },
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFADD8E6), contentColor = Color.Black)
+            ) { Text("➕ Aggiungi nuovo certificato", fontSize = 20.sp) }
+
             Spacer(modifier = Modifier.height(10.dp))
 
             Button(
-                onClick = { navController.navigate("apilogs") },
+                onClick = { navController.navigate("summary") },
                 modifier = Modifier.fillMaxWidth().height(50.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFADD8E6), contentColor = Color.Black)
-            ) { Text("📡 Log API", fontSize = 20.sp) }
+            ) { Text("📊 Vedi Riepilogo Bonus", fontSize = 20.sp) }
 
-            Spacer(modifier = Modifier.height(30.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
+            // --- 🛠️ CENTRO SINCRONIZZAZIONE (v14) ---
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (lastOpFailed) Color(0xFFFFF0F0) else Color(0xFFF5F5F5)
+                )
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            modifier = Modifier.size(10.dp),
+                            shape = androidx.compose.foundation.shape.CircleShape,
+                            color = syncStatusColor
+                        ) {}
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "CENTRO SINCRONIZZAZIONE",
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 14.sp,
+                            color = if (lastOpFailed) Color.Red else Color.DarkGray
+                        )
+                    }
+
+                    Text(
+                        text = if (lastOpFailed) "⚠️ Errore di connessione"
+                        else "Ultimo check: ${lastSyncTime?.split(" ")?.getOrNull(1) ?: "Mai"}",
+                        fontSize = 10.sp,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
+                        color = if (lastOpFailed) Color.Red else Color.Gray
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { viewModel.updateAllCertificates() },
+                            modifier = Modifier.weight(1f).height(60.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF32CD32))
+                        ) {
+                            Text("🔄 PORTAFOGLIO\n(Borsa IT)", fontSize = 11.sp, textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = { viewModel.updateAllUnderlyings() },
+                            modifier = Modifier.weight(1f).height(60.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))
+                        ) {
+                            Text("📊 MERCATI\n(Worst-Of)", fontSize = 11.sp, textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Button(
+                        onClick = { navController.navigate("apilogs") },
+                        modifier = Modifier.fillMaxWidth().height(45.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE0E0E0), contentColor = Color.Black)
+                    ) { Text("📡 ISPEZIONA LOG CONNESSIONI", fontSize = 13.sp) }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // BACKUP
             val context = androidx.compose.ui.platform.LocalContext.current
-
             Button(
                 onClick = { viewModel.avviaEsportazione(context) },
                 modifier = Modifier.fillMaxWidth().height(55.dp),
@@ -259,24 +287,12 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
             }
 
             Text(
-                text = "Il file backup_certificates_v12.db sarà salvato nei Download",
+                text = "Il file backup_certificates_v14.db sarà salvato nei Download",
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 20.dp),
                 textAlign = TextAlign.Center,
                 fontSize = 11.sp,
                 color = Color.Gray
             )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Button(
-                onClick = { viewModel.updateAllUnderlyings() },
-                modifier = Modifier.fillMaxWidth().height(60.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2), contentColor = Color.White),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
-            ) {
-                Text("🔄 ", fontSize = 18.sp)
-                Text("AGGIORNA SOTTOSTANTI (Yahoo)", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            }
 
             Spacer(modifier = Modifier.height(40.dp))
         }

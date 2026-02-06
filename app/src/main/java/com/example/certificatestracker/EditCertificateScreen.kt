@@ -6,7 +6,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
@@ -53,6 +52,7 @@ fun EditCertificateScreen(
     var bonusMonths by remember { mutableStateOf(certificate?.bonusMonths?.toString() ?: "") }
     var autocallMonths by remember { mutableStateOf(certificate?.autocallMonths?.toString() ?: "") }
 
+    // Queste funzioni vengono lette automaticamente da Helpers.kt
     var rawNextBonus by remember { mutableStateOf(normalizeToShortRawDateForEdit(certificate?.nextbonus ?: "")) }
     var rawValAutocall by remember { mutableStateOf(normalizeToShortRawDateForEdit(certificate?.valautocall ?: "")) }
 
@@ -63,7 +63,7 @@ fun EditCertificateScreen(
         modifier = Modifier.fillMaxSize().verticalScroll(scrollState).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text("Configurazione Certificato v13", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = Color(0xFF1976D2))
+        Text("Configurazione Certificato v14", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = Color(0xFF1976D2))
 
         // --- SEZIONE 1: IDENTIFICAZIONE ---
         OutlinedTextField(value = isin, onValueChange = { isin = it.uppercase() }, label = { Text("ISIN") }, modifier = Modifier.fillMaxWidth())
@@ -73,31 +73,30 @@ fun EditCertificateScreen(
             OutlinedTextField(value = purchasePrice, onValueChange = { purchasePrice = it.filter { it.isDigit() || it == '.' } }, label = { Text("Prezzo Acquisto") }, modifier = Modifier.weight(1f))
         }
 
-        Divider(Modifier.padding(vertical = 8.dp))
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
         // --- SEZIONE 2: SOTTOSTANTI (PANIERE) ---
         Text("Paniere Sottostanti (Ticker Yahoo | Strike)", fontWeight = FontWeight.Bold, fontSize = 14.sp)
 
         @Composable
-        fun rowUnd(ticker: String, onTChange: (String) -> Unit, strike: String, onSChange: (String) -> Unit, label: String) {
+        fun RowUnd(ticker: String, onTChange: (String) -> Unit, strike: String, onSChange: (String) -> Unit, label: String) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(value = ticker, onValueChange = { onTChange(it.uppercase()) }, label = { Text(label) }, modifier = Modifier.weight(1.5f))
                 OutlinedTextField(value = strike, onValueChange = { onSChange(it) }, label = { Text("Strike") }, modifier = Modifier.weight(1f))
             }
         }
 
-        rowUnd(und1, { und1 = it }, s1, { s1 = it }, "Sottostante 1")
-        rowUnd(und2, { und2 = it }, s2, { s2 = it }, "Sottostante 2")
-        rowUnd(und3, { und3 = it }, s3, { s3 = it }, "Sottostante 3")
+        RowUnd(und1, { und1 = it }, s1, { s1 = it }, "Sottostante 1")
+        RowUnd(und2, { und2 = it }, s2, { s2 = it }, "Sottostante 2")
+        RowUnd(und3, { und3 = it }, s3, { s3 = it }, "Sottostante 3")
 
-        // Mostriamo gli altri 3 solo se i primi sono pieni (per pulizia UI)
-        if (und3.isNotEmpty()) {
-            rowUnd(und4, { und4 = it }, s4, { s4 = it }, "Sottostante 4")
-            rowUnd(und5, { und5 = it }, s5, { s5 = it }, "Sottostante 5")
-            rowUnd(und6, { und6 = it }, s6, { s6 = it }, "Sottostante 6")
+        if (und1.isNotEmpty()) {
+            RowUnd(und4, { und4 = it }, s4, { s4 = it }, "Sottostante 4")
+            RowUnd(und5, { und5 = it }, s5, { s5 = it }, "Sottostante 5")
+            RowUnd(und6, { und6 = it }, s6, { s6 = it }, "Sottostante 6")
         }
 
-        Divider(Modifier.padding(vertical = 8.dp))
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
         // --- SEZIONE 3: SOGLIE PERCENTUALI ---
         Text("Soglie di Riferimento (%)", fontWeight = FontWeight.Bold, fontSize = 14.sp)
@@ -107,19 +106,19 @@ fun EditCertificateScreen(
             OutlinedTextField(value = auPerc, onValueChange = { auPerc = it }, label = { Text("% Autocall") }, modifier = Modifier.weight(1f))
         }
 
-        Divider(Modifier.padding(vertical = 8.dp))
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
         // --- SEZIONE 4: CEDOLE E DATE ---
         OutlinedTextField(value = premio, onValueChange = { premio = it }, label = { Text("Importo Cedola (€)") }, modifier = Modifier.fillMaxWidth())
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(value = bonusMonths, onValueChange = { bonusMonths = it }, label = { Text("Freq. Cedola (Mesi)") }, modifier = Modifier.weight(1f))
-            OutlinedTextField(value = rawNextBonus, onValueChange = { rawNextBonus = it.filter { it.isDigit() } }, label = { Text("Data Cedola (DDMMYY)") }, modifier = Modifier.weight(1.2f))
+            OutlinedTextField(value = rawNextBonus, onValueChange = { if(it.length <= 6) rawNextBonus = it.filter { it.isDigit() } }, label = { Text("Data Cedola (DDMMYY)") }, modifier = Modifier.weight(1.2f))
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(value = autocallMonths, onValueChange = { autocallMonths = it }, label = { Text("Freq. Autocall (Mesi)") }, modifier = Modifier.weight(1f))
-            OutlinedTextField(value = rawValAutocall, onValueChange = { rawValAutocall = it.filter { it.isDigit() } }, label = { Text("Data Autocall (DDMMYY)") }, modifier = Modifier.weight(1.2f))
+            OutlinedTextField(value = rawValAutocall, onValueChange = { if(it.length <= 6) rawValAutocall = it.filter { it.isDigit() } }, label = { Text("Data Autocall (DDMMYY)") }, modifier = Modifier.weight(1.2f))
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -131,12 +130,12 @@ fun EditCertificateScreen(
                     scope.launch {
                         val newCertificate = Certificate(
                             isin = isin,
-                            underlyingName = und1, // Compatibilità v12
-                            strike = s1.toDoubleOrNull() ?: 0.0, // Compatibilità v12
-                            barrier = 0.0, // Ora usiamo barrierPerc
-                            bonusLevel = 0.0, // Ora usiamo bonusPerc
+                            underlyingName = und1,
+                            strike = s1.toDoubleOrNull() ?: 0.0,
+                            barrier = 0.0,
+                            bonusLevel = 0.0,
                             bonusMonths = bonusMonths.toIntOrNull() ?: 0,
-                            autocallLevel = 0.0, // Ora usiamo autocallPerc
+                            autocallLevel = 0.0,
                             autocallMonths = autocallMonths.toIntOrNull() ?: 0,
                             premio = premio.toDoubleOrNull() ?: 0.0,
                             nextbonus = rawToDisplayDate(rawNextBonus),
@@ -145,7 +144,6 @@ fun EditCertificateScreen(
                             lastUpdate = certificate?.lastUpdate,
                             quantity = quantity.toIntOrNull() ?: 0,
                             purchasePrice = purchasePrice.toDoubleOrNull(),
-                            // Campi v13
                             und1 = und1, und1Strike = s1.toDoubleOrNull() ?: 0.0,
                             und2 = und2, und2Strike = s2.toDoubleOrNull() ?: 0.0,
                             und3 = und3, und3Strike = s3.toDoubleOrNull() ?: 0.0,
@@ -159,7 +157,9 @@ fun EditCertificateScreen(
 
                         if (certificate == null) viewModel.addCertificate(newCertificate)
                         else {
-                            viewModel.deleteCertificate(certificate.isin)
+                            if (certificate.isin != newCertificate.isin) {
+                                viewModel.deleteCertificate(certificate.isin)
+                            }
                             viewModel.addCertificate(newCertificate)
                         }
                         onDone()

@@ -11,26 +11,38 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import android.content.Context
 
+// 🔹 1. LISTA GLOBALE: Spostata fuori dalla classe per non essere resettata
+private val globalApiLogs = mutableStateListOf<String>()
+
 class CertificatesViewModel(
     private val dao: CertificatesDao,
     private val apiUsageDao: ApiUsageDao,
     private val insertionDao: CertificateInsertionDao,
-    private val underlyingPriceDao: UnderlyingPriceDao // 🔹 1. Iniettiamo il nuovo DAO v14
+    private val underlyingPriceDao: UnderlyingPriceDao
 ) : ViewModel() {
 
-    private val _apiLogs = mutableStateListOf<String>()
-    val apiLogs: List<String> get() = _apiLogs
+    // 🔹 2. Riferimento alla lista globale
+    val apiLogs: List<String> get() = globalApiLogs
 
-    // Mappa in RAM per i calcoli UI istantanei
+    private val _lastOperationFailed = MutableStateFlow(false)
+    val lastOperationFailed = _lastOperationFailed.asStateFlow()
+
+    private val _lastSyncTime = MutableStateFlow<String?>(null)
+    val lastSyncTime = _lastSyncTime.asStateFlow()
+
     private val lastPricesMap = mutableStateMapOf<String, Double>()
+    private val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
 
+    // 🔹 3. Funzione di log aggiornata per usare la lista globale
     private fun logApi(message: String) {
         val timestamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
-        _apiLogs.add("[$timestamp] $message")
-        if (_apiLogs.size > 200) _apiLogs.removeFirst()
-    }
+        globalApiLogs.add("[$timestamp] $message")
 
-    private val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+        // Debug su Logcat di sistema (per sicurezza)
+        Log.d("CERT_TRACKER_LOG", "Nuovo: $message")
+
+        if (globalApiLogs.size > 1000) globalApiLogs.removeFirst()
+    }
 
     val certificates: StateFlow<List<Certificate>> =
         dao.getAllFlow().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
@@ -43,36 +55,160 @@ class CertificatesViewModel(
 
     init {
         refreshInsertionDates()
-        caricaPrezziDalDatabase() // 🔹 2. All'avvio, recuperiamo i prezzi persistenti
+        caricaPrezziDalDatabase()
     }
 
-    // 🔹 3. Caricamento Offline: Riempiamo la mappa RAM dai dati del DB v14
     private fun caricaPrezziDalDatabase() {
         viewModelScope.launch {
             val prezziSalvati = underlyingPriceDao.getAll()
             prezziSalvati.forEach {
                 lastPricesMap[it.ticker] = it.price
             }
-            if (prezziSalvati.isNotEmpty()) {
-                logApi("📦 Caricati ${prezziSalvati.size} sottostanti dal database.")
-            }
+            _lastSyncTime.value = prezziSalvati.maxByOrNull { it.lastUpdate }?.lastUpdate
         }
     }
 
-    fun getLastKnownPrice(ticker: String): Double {
-        return lastPricesMap[ticker] ?: 0.0
-    }
+    fun getLastKnownPrice(ticker: String): Double = lastPricesMap[ticker] ?: 0.0
 
     fun refreshInsertionDates() {
         viewModelScope.launch {
             val allCerts = certificates.value
             val map = mutableMapOf<String, String>()
             allCerts.forEach { cert ->
-                insertionDao.getByIsin(cert.isin)?.let {
-                    map[cert.isin] = it.insertionDate
-                }
+                insertionDao.getByIsin(cert.isin)?.let { map[cert.isin] = it.insertionDate }
             }
             _insertionDates.value = map
+        }
+    }
+
+    fun fetchAndUpdatePrice(isin: String, useBorsaItaliana: Boolean = true) {
+        viewModelScope.launch {
+            _lastOperationFailed.value = false
+            val cert = certificates.value.find { it.isin == isin } ?: return@launch
+            val symbol = (cert.und1 ?: cert.underlyingName).trim()
+            val now = formatter.format(Date())
+
+            if (useBorsaItaliana) {
+                val result = BorsaItalianaFetcher.fetchLatestClose(isin)
+                handleFetchResult(result, isin, now, ApiProvider.BORSA_ITALIANA)
+            } else {
+                val yahooPrice = YahooFinanceFetcher.getPrice(symbol)
+                if (yahooPrice != null) {
+                    handleFetchResult(FetchResult.Success(yahooPrice), isin, now, ApiProvider.YAHOO)
+                } else {
+                    _lastOperationFailed.value = true
+                    logApi("⚠️ Yahoo non trovato per $symbol")
+                }
+            }
+        }
+    }
+
+    private fun handleFetchResult(result: FetchResult, isin: String, now: String, provider: ApiProvider) {
+        viewModelScope.launch {
+            when (result) {
+                is FetchResult.Success -> {
+                    _lastOperationFailed.value = false
+                    _lastSyncTime.value = now
+                    val roundedPrice = (kotlin.math.round(result.price * 100) / 100.0)
+
+                    if (provider == ApiProvider.BORSA_ITALIANA) {
+                        dao.updateCertificatePrice(isin, roundedPrice, now)
+                    } else {
+                        dao.updateUnderlyingPrice(isin, roundedPrice, now)
+                        val cert = certificates.value.find { it.isin == isin }
+                        val ticker = (cert?.und1 ?: cert?.underlyingName)?.trim()
+                        ticker?.let {
+                            lastPricesMap[it] = roundedPrice
+                            underlyingPriceDao.insertOrUpdate(UnderlyingPrice(it, roundedPrice, now))
+                        }
+                        incrementApiUsage(provider.displayName)
+                    }
+                    logApi("✅ ${provider.displayName} → $roundedPrice")
+                }
+                is FetchResult.Error -> {
+                    _lastOperationFailed.value = true
+                    logApi("❌ ${provider.displayName} → ${result.message}")
+                }
+            }
+        }
+    }
+
+    fun updateAllUnderlyings() {
+        viewModelScope.launch {
+            _lastOperationFailed.value = false
+            logApi("🚀 START: Sincronizzazione Mercati (v14)") // Questo già c'era
+
+            val listaCertificati = certificates.value
+            val tickerUnici = listaCertificati.flatMap { cert ->
+                listOfNotNull(cert.und1, cert.und2, cert.und3, cert.und4, cert.und5, cert.und6)
+            }.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+
+            if (tickerUnici.isEmpty()) {
+                logApi("⚠️ Nessun sottostante trovato da aggiornare.")
+                return@launch
+            }
+
+            var hasError = false
+            tickerUnici.forEachIndexed { index, symbol ->
+                // 🔹 LOG: Notifica l'inizio dell'aggiornamento per il ticker
+                logApi("🔍 Sottostante [${index + 1}/${tickerUnici.size}]: $symbol")
+
+                val prezzoYahoo = YahooFinanceFetcher.getPrice(symbol)
+                if (prezzoYahoo != null) {
+                    val now = formatter.format(Date())
+                    val roundedPrice = (kotlin.math.round(prezzoYahoo * 100) / 100.0)
+
+                    lastPricesMap[symbol] = roundedPrice
+                    underlyingPriceDao.insertOrUpdate(UnderlyingPrice(symbol, roundedPrice, now))
+                    _lastSyncTime.value = now
+
+                    // Aggiorna i certificati che hanno questo sottostante come "principale"
+                    listaCertificati.filter { (it.und1 ?: it.underlyingName).trim() == symbol }.forEach { cert ->
+                        dao.updateUnderlyingPrice(cert.isin, roundedPrice, now)
+                    }
+
+                    // 🔹 LOG: Conferma successo per il ticker
+                    logApi("✅ Yahoo Finance → $symbol: $roundedPrice")
+                } else {
+                    hasError = true
+                    // 🔹 LOG: Segnala errore per il ticker
+                    logApi("❌ Yahoo Finance → $symbol non trovato")
+                }
+
+                // Ritardo per evitare blocchi da Yahoo
+                kotlinx.coroutines.delay(1000)
+            }
+
+            _lastOperationFailed.value = hasError
+            logApi(if (hasError) "⚠️ Fine: Sincronizzazione conclusa con alcuni errori" else "🏁 Fine: Mercati aggiornati con successo")
+        }
+    }
+    fun updateAllCertificates() {
+        viewModelScope.launch {
+            _lastOperationFailed.value = false
+            logApi("🚀 Avvio aggiornamento globale portafoglio...")
+
+            val lista = certificates.value
+            if (lista.isEmpty()) {
+                logApi("⚠️ Nessun certificato in portafoglio da aggiornare.")
+                return@launch
+            }
+
+            var erroriRilevati = false
+            lista.forEachIndexed { index, cert ->
+                try {
+                    logApi("🔍 Aggiornamento [${index + 1}/${lista.size}]: ${cert.isin}")
+                    fetchAndUpdatePrice(cert.isin, useBorsaItaliana = true)
+                    // Aspettiamo un po' tra una chiamata e l'altra per non sovraccaricare
+                    kotlinx.coroutines.delay(2500)
+                } catch (e: Exception) {
+                    erroriRilevati = true
+                    logApi("❌ Errore durante l'aggiornamento di ${cert.isin}")
+                }
+            }
+
+            _lastOperationFailed.value = erroriRilevati
+            logApi("🏁 Fine: Aggiornamento globale completato") // 👈 Questo è il messaggio che mancava
         }
     }
 
@@ -87,132 +223,9 @@ class CertificatesViewModel(
         }
     }
 
-    fun updateCertificate(certificate: Certificate) {
-        viewModelScope.launch {
-            dao.update(certificate)
-        }
-    }
-
-    fun deleteCertificate(isin: String) {
-        viewModelScope.launch {
-            dao.deleteByIsin(isin)
-        }
-    }
-
-    fun fetchAndUpdatePrice(isin: String, useBorsaItaliana: Boolean = true) {
-        viewModelScope.launch {
-            val cert = certificates.value.find { it.isin == isin } ?: return@launch
-            val symbol = (cert.und1 ?: cert.underlyingName).trim()
-            val now = formatter.format(Date())
-
-            logApi("───────────────────────────────")
-
-            if (useBorsaItaliana) {
-                logApi("🔹 Scraper Borsa IT per $isin")
-                val result = BorsaItalianaFetcher.fetchLatestClose(isin)
-                handleFetchResult(result, isin, now, ApiProvider.BORSA_ITALIANA)
-            } else {
-                logApi("🔹 API Sottostante per $symbol ($isin)")
-                logApi("🔍 Tentativo Yahoo Finance...")
-                val yahooPrice = YahooFinanceFetcher.getPrice(symbol)
-
-                if (yahooPrice != null) {
-                    handleFetchResult(FetchResult.Success(yahooPrice), isin, now, ApiProvider.YAHOO)
-                } else {
-                    logApi("⚠️ Yahoo non trovato. Utilizzo fallback...")
-                }
-            }
-        }
-    }
-
-    private fun handleFetchResult(result: FetchResult, isin: String, now: String, provider: ApiProvider) {
-        viewModelScope.launch {
-            when (result) {
-                is FetchResult.Success -> {
-                    logApi("✅ ${provider.displayName} → ${result.price}")
-                    val roundedPrice = (kotlin.math.round(result.price * 100) / 100.0)
-
-                    if (provider == ApiProvider.BORSA_ITALIANA) {
-                        dao.updateCertificatePrice(isin, roundedPrice, now)
-                    } else {
-                        dao.updateUnderlyingPrice(isin, roundedPrice, now)
-                        val cert = certificates.value.find { it.isin == isin }
-                        val ticker = (cert?.und1 ?: cert?.underlyingName)?.trim()
-
-                        ticker?.let {
-                            lastPricesMap[it] = roundedPrice
-                            // 🔹 4. Salviamo il prezzo nel DB v14 per l'uso futuro
-                            underlyingPriceDao.insertOrUpdate(UnderlyingPrice(it, roundedPrice, now))
-                        }
-                        incrementApiUsage(provider.displayName)
-                    }
-                }
-                is FetchResult.Error -> logApi("❌ ${provider.displayName} → ${result.message}")
-            }
-        }
-    }
-
-    private fun incrementApiUsage(providerName: String) {
-        viewModelScope.launch {
-            val usage = apiUsageDao.get(providerName)
-            val now = Calendar.getInstance()
-            val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(now.time)
-            val currentMonth = SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(now.time)
-            val currentTimestamp = formatter.format(now.time)
-
-            if (usage != null) {
-                val isNewDay = !usage.lastUpdated.startsWith(todayDate)
-                val isNewMonth = !usage.lastUpdated.startsWith(currentMonth)
-                apiUsageDao.insert(usage.copy(
-                    dailyCount = if (isNewDay) 1 else usage.dailyCount + 1,
-                    monthlyCount = if (isNewMonth) 1 else usage.monthlyCount + 1,
-                    lastUpdated = currentTimestamp
-                ))
-            } else {
-                apiUsageDao.insert(ApiUsage(providerName, 1, 1, currentTimestamp))
-            }
-        }
-    }
-
-    /**
-     * 🚀 AGGIORNAMENTO GLOBALE v14: Scansiona i 6 slot e salva tutto nel DB
-     */
-    fun updateAllUnderlyings() {
-        viewModelScope.launch {
-            logApi("🚀 START: Aggiornamento globale Yahoo Finance (v14)")
-            val listaCertificati = certificates.value
-
-            val tickerUnici = listaCertificati.flatMap { cert ->
-                listOfNotNull(cert.und1, cert.und2, cert.und3, cert.und4, cert.und5, cert.und6)
-            }.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
-
-            tickerUnici.forEachIndexed { index, symbol ->
-                logApi("🔄 [${index + 1}/${tickerUnici.size}] Yahoo per $symbol")
-                val prezzoYahoo = YahooFinanceFetcher.getPrice(symbol)
-
-                if (prezzoYahoo != null) {
-                    val now = formatter.format(Date())
-                    val roundedPrice = (kotlin.math.round(prezzoYahoo * 100) / 100.0)
-
-                    // RAM
-                    lastPricesMap[symbol] = roundedPrice
-
-                    // DATABASE PREZZI v14
-                    underlyingPriceDao.insertOrUpdate(UnderlyingPrice(symbol, roundedPrice, now))
-
-                    // DATABASE CERTIFICATI (und1/underlyingPrice per compatibilità)
-                    listaCertificati.filter { (it.und1 ?: it.underlyingName).trim() == symbol }.forEach { cert ->
-                        dao.updateUnderlyingPrice(cert.isin, roundedPrice, now)
-                    }
-                    logApi("📈 $symbol aggiornato e salvato: €$roundedPrice")
-                } else {
-                    logApi("⚠️ $symbol: Non trovato")
-                }
-                kotlinx.coroutines.delay(1000)
-            }
-            logApi("🏁 FINE: Sottostanti aggiornati.")
-        }
-    }
+    fun deleteCertificate(isin: String) = viewModelScope.launch { dao.deleteByIsin(isin) }
+    fun updateCertificate(certificate: Certificate) = viewModelScope.launch { dao.update(certificate) }
+    fun avviaEsportazione(context: Context) = viewModelScope.launch { logApi(DatabaseManager.exportDatabase(context)) }
 
     fun updateDatesIfNeeded(cert: Certificate): Certificate {
         var updatedNext = cert.nextbonus
@@ -243,20 +256,25 @@ class CertificatesViewModel(
         return null
     }
 
-    fun updateAllCertificates() {
+    private fun incrementApiUsage(providerName: String) {
         viewModelScope.launch {
-            logApi("🚀 Avvio aggiornamento globale portafoglio...")
-            certificates.value.forEachIndexed { index, cert ->
-                fetchAndUpdatePrice(cert.isin, useBorsaItaliana = true)
-                kotlinx.coroutines.delay(2500)
-            }
-            logApi("✅ Aggiornamento globale terminato.")
-        }
-    }
+            val usage = apiUsageDao.get(providerName)
+            val now = Calendar.getInstance()
+            val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(now.time)
+            val currentMonth = SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(now.time)
+            val currentTimestamp = formatter.format(now.time)
 
-    fun avviaEsportazione(context: Context) {
-        viewModelScope.launch {
-            logApi(DatabaseManager.exportDatabase(context))
+            if (usage != null) {
+                val isNewDay = !usage.lastUpdated.startsWith(todayDate)
+                val isNewMonth = !usage.lastUpdated.startsWith(currentMonth)
+                apiUsageDao.insert(usage.copy(
+                    dailyCount = if (isNewDay) 1 else usage.dailyCount + 1,
+                    monthlyCount = if (isNewMonth) 1 else usage.monthlyCount + 1,
+                    lastUpdated = currentTimestamp
+                ))
+            } else {
+                apiUsageDao.insert(ApiUsage(providerName, 1, 1, currentTimestamp))
+            }
         }
     }
 }
