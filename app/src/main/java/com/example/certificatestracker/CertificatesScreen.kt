@@ -3,6 +3,10 @@ package com.example.certificatestracker
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -13,7 +17,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.style.TextAlign
 import androidx.navigation.NavController
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -21,10 +24,9 @@ import java.util.*
 @Composable
 fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavController) {
     val certificatesFlow by viewModel.certificates.collectAsState(initial = emptyList())
-    val apiUsages by viewModel.apiUsages.collectAsState(initial = emptyList())
     val insertionDates by viewModel.insertionDates.collectAsState()
 
-    // 🔹 Sensori dal ViewModel per il LED e lo Stato
+    // 🔹 Sensori dal ViewModel per lo stato della sincronizzazione
     val lastOpFailed by viewModel.lastOperationFailed.collectAsState()
     val lastSyncTime by viewModel.lastSyncTime.collectAsState()
 
@@ -37,18 +39,18 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
     val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
 
-    // 🟢 Logica Colore LED
+    // 🟢 Logica Colore LED per il Centro Sincronizzazione
     val syncStatusColor = remember(lastSyncTime, lastOpFailed) {
-        if (lastOpFailed) return@remember Color.Magenta // Errore critico
+        if (lastOpFailed) return@remember Color.Magenta
         if (lastSyncTime == null) return@remember Color.Red
         try {
             val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
             val lastDate = sdf.parse(lastSyncTime!!)
             val diffMinutes = (Date().time - lastDate.time) / (1000 * 60)
             when {
-                diffMinutes < 15 -> Color(0xFF32CD32) // Verde (Fresco)
-                diffMinutes < 240 -> Color(0xFFFFC107) // Giallo (Recente)
-                else -> Color.Red // Rosso (Vecchio)
+                diffMinutes < 15 -> Color(0xFF32CD32) // Verde
+                diffMinutes < 240 -> Color(0xFFFFC107) // Giallo
+                else -> Color.Red // Rosso
             }
         } catch (e: Exception) { Color.Gray }
     }
@@ -72,11 +74,14 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
             val certificates = certificatesFlow.map { viewModel.updateDatesIfNeeded(it) }
 
             if (certificates.isNotEmpty()) {
+                // Reset dell'indice se superiore alla dimensione attuale (dopo eliminazione)
+                if (currentIndex >= certificates.size) currentIndex = (certificates.size - 1).coerceAtLeast(0)
+
                 val cert = certificates.getOrNull(currentIndex)
                 cert?.let {
                     val textColor = if (recentlyUpdated[it.isin] == true) Color(0xFF008000) else Color.Black
 
-                    // 🛠️ LOGICA WORST-OF DINAMICA
+                    // 🛠️ LOGICA WORST-OF DINAMICA v14
                     val sottostanti = listOf(
                         it.und1 to it.und1Strike,
                         it.und2 to it.und2Strike,
@@ -104,17 +109,14 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
                         text = buildString {
                             append("ISIN: ${it.isin} (${it.lastUpdate ?: "-"})\n")
                             append("Valore Mercato: ${it.lastPrice} EUR\n\n")
-
                             append("🏆 WORST-OF: $worstTicker\n")
                             append("Prezzo: $worstPrice EUR (${worstPerf.format(1)}% dallo Strike)\n")
                             append("Quantità: ${it.quantity}")
                             if (it.purchasePrice != null) append("  Costo: €${it.purchasePrice}")
-
                             append("\n\nDISTANZA DALLE SOGLIE (%):\n")
                             append("Barriera (${it.barrierPerc}%): ${distBarrier.format(1)}%\n")
                             append("Bonus (${it.bonusPerc}%): ${distBonus.format(1)}%\n")
                             append("Autocall (${it.autocallPerc}%): ${distAutocall.format(1)}%\n\n")
-
                             append("Cedola: ${(it.premio * it.quantity).format2(2)} € - il: ${it.nextbonus}\n")
                             append("Valutazione Autocall: ${it.valautocall}")
                         },
@@ -125,7 +127,7 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
 
                     Spacer(modifier = Modifier.height(20.dp))
 
-                    // NAVIGAZIONE
+                    // 🔹 NAVIGAZIONE TRA SCHEDE
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -154,17 +156,31 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
 
                     Spacer(modifier = Modifier.height(20.dp))
 
-                    Button(
-                        onClick = { selectedCert = it; showEditScreen = true },
-                        modifier = Modifier.fillMaxWidth().height(50.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE6E6FA), contentColor = Color.Black)
-                    ) { Text("Modifica questo ISIN", fontSize = 18.sp) }
+                    // 🔹 BOTTONI AZIONE: MODIFICA ED ELIMINA
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { selectedCert = it; showEditScreen = true },
+                            modifier = Modifier.weight(1f).height(50.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE6E6FA), contentColor = Color.Black)
+                        ) { Text("📝 Modifica", fontSize = 16.sp) }
+
+                        IconButton(
+                            onClick = { selectedCert = it; showDeleteDialog = true },
+                            modifier = Modifier.height(50.dp).width(50.dp),
+                            colors = IconButtonDefaults.iconButtonColors(containerColor = Color(0xFFFFEBEE))
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = "Elimina", tint = Color.Red)
+                        }
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // BONUS PROSSIMI MESI
+            // 🔹 CALCOLO E VISUALIZZAZIONE BONUS
             val monthlyBonuses = remember(certificatesFlow, insertionDates) {
                 MonthlyBonusCalculator.calculate(
                     certificates = certificatesFlow,
@@ -190,12 +206,12 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // PULSANTI NAVIGAZIONE
+            // 🔹 PULSANTI AGGIUNGI E RIEPILOGO
             Button(
                 onClick = { selectedCert = null; showEditScreen = true },
                 modifier = Modifier.fillMaxWidth().height(50.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFADD8E6), contentColor = Color.Black)
-            ) { Text("➕ Aggiungi nuovo certificato", fontSize = 20.sp) }
+            ) { Text("➕ Aggiungi nuovo certificato", fontSize = 18.sp) }
 
             Spacer(modifier = Modifier.height(10.dp))
 
@@ -203,11 +219,11 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
                 onClick = { navController.navigate("summary") },
                 modifier = Modifier.fillMaxWidth().height(50.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFADD8E6), contentColor = Color.Black)
-            ) { Text("📊 Vedi Riepilogo Bonus", fontSize = 20.sp) }
+            ) { Text("📊 Vedi Riepilogo Bonus", fontSize = 18.sp) }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // --- 🛠️ CENTRO SINCRONIZZAZIONE (v14) ---
+            // 🔹 CENTRO SINCRONIZZAZIONE v14
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -220,27 +236,17 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Surface(
-                            modifier = Modifier.size(10.dp),
-                            shape = androidx.compose.foundation.shape.CircleShape,
-                            color = syncStatusColor
-                        ) {}
+                        Surface(modifier = Modifier.size(10.dp), shape = CircleShape, color = syncStatusColor) {}
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            "CENTRO SINCRONIZZAZIONE",
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 14.sp,
-                            color = if (lastOpFailed) Color.Red else Color.DarkGray
-                        )
+                        Text("CENTRO SINCRONIZZAZIONE", fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
                     }
 
                     Text(
-                        text = if (lastOpFailed) "⚠️ Errore di connessione"
-                        else "Ultimo check: ${lastSyncTime?.split(" ")?.getOrNull(1) ?: "Mai"}",
+                        text = if (lastOpFailed) "⚠️ Errore rilevato" else "Ultimo check: ${lastSyncTime?.split(" ")?.getOrNull(1) ?: "Mai"}",
                         fontSize = 10.sp,
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = TextAlign.Center,
-                        color = if (lastOpFailed) Color.Red else Color.Gray
+                        color = Color.Gray
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -275,34 +281,25 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // BACKUP
+            // 🔹 BACKUP
             val context = androidx.compose.ui.platform.LocalContext.current
             Button(
                 onClick = { viewModel.avviaEsportazione(context) },
                 modifier = Modifier.fillMaxWidth().height(55.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF455A64), contentColor = Color.White),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
-            ) {
-                Text("💾 ESPORTA DATABASE (BACKUP)", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
-
-            Text(
-                text = "Il file backup_certificates_v14.db sarà salvato nei Download",
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 20.dp),
-                textAlign = TextAlign.Center,
-                fontSize = 11.sp,
-                color = Color.Gray
-            )
+                shape = RoundedCornerShape(10.dp)
+            ) { Text("💾 ESPORTA DATABASE (BACKUP)", fontSize = 16.sp, fontWeight = FontWeight.Bold) }
 
             Spacer(modifier = Modifier.height(40.dp))
         }
     }
 
+    // 🔹 DIALOGO DI CONFERMA ELIMINAZIONE
     if (showDeleteDialog && selectedCert != null) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             title = { Text("Conferma eliminazione") },
-            text = { Text("Vuoi davvero cancellare l’ISIN ${selectedCert!!.isin}?") },
+            text = { Text("Vuoi davvero cancellare l'ISIN ${selectedCert!!.isin}?") },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deleteCertificate(selectedCert!!.isin)
@@ -317,5 +314,6 @@ fun CertificatesScreen(viewModel: CertificatesViewModel, navController: NavContr
     }
 }
 
-fun Double.format(digits: Int) = "%.${digits}f".format(this)
-fun Double.format2(digits: Int) = "%.${digits}f".format(this)
+// Aggiungi queste funzioni in fondo al file, fuori dal blocco CertificatesScreen
+fun Double.format(digits: Int) = "%.${digits}f".format(Locale.US, this)
+fun Double.format2(digits: Int) = "%.${digits}f".format(Locale.US, this)
