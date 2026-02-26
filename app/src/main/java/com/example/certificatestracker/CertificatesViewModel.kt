@@ -11,7 +11,6 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import android.content.Context
 
-// 🔹 1. LISTA GLOBALE: Spostata fuori dalla classe per non essere resettata
 private val globalApiLogs = mutableStateListOf<String>()
 
 class CertificatesViewModel(
@@ -21,11 +20,17 @@ class CertificatesViewModel(
     private val underlyingPriceDao: UnderlyingPriceDao
 ) : ViewModel() {
 
-    // 🔹 2. Riferimento alla lista globale
     val apiLogs: List<String> get() = globalApiLogs
 
     private val _lastOperationFailed = MutableStateFlow(false)
     val lastOperationFailed = _lastOperationFailed.asStateFlow()
+
+    private val _syncSuccess = MutableStateFlow(false)
+    val syncSuccess = _syncSuccess.asStateFlow()
+
+    // 🔹 NUOVO SENSORE: Indica se un aggiornamento è in corso
+    private val _isSyncing = MutableStateFlow(false)
+    val isSyncing = _isSyncing.asStateFlow()
 
     private val _lastSyncTime = MutableStateFlow<String?>(null)
     val lastSyncTime = _lastSyncTime.asStateFlow()
@@ -33,14 +38,10 @@ class CertificatesViewModel(
     private val lastPricesMap = mutableStateMapOf<String, Double>()
     private val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
 
-    // 🔹 3. Funzione di log aggiornata per usare la lista globale
     private fun logApi(message: String) {
         val timestamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
         globalApiLogs.add("[$timestamp] $message")
-
-        // Debug su Logcat di sistema (per sicurezza)
         Log.d("CERT_TRACKER_LOG", "Nuovo: $message")
-
         if (globalApiLogs.size > 1000) globalApiLogs.removeFirst()
     }
 
@@ -135,8 +136,12 @@ class CertificatesViewModel(
 
     fun updateAllUnderlyings() {
         viewModelScope.launch {
+            // 🔄 RESET STATI PER NUOVO CICLO
+            _isSyncing.value = true
+            _syncSuccess.value = false
             _lastOperationFailed.value = false
-            logApi("🚀 START: Sincronizzazione Mercati (v14)") // Questo già c'era
+
+            logApi("🚀 START: Sincronizzazione Mercati (v14)")
 
             val listaCertificati = certificates.value
             val tickerUnici = listaCertificati.flatMap { cert ->
@@ -144,53 +149,52 @@ class CertificatesViewModel(
             }.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
 
             if (tickerUnici.isEmpty()) {
-                logApi("⚠️ Nessun sottostante trovato da aggiornare.")
+                logApi("⚠️ Nessun sottostante trovato.")
+                _isSyncing.value = false
                 return@launch
             }
 
             var hasError = false
             tickerUnici.forEachIndexed { index, symbol ->
-                // 🔹 LOG: Notifica l'inizio dell'aggiornamento per il ticker
                 logApi("🔍 Sottostante [${index + 1}/${tickerUnici.size}]: $symbol")
-
                 val prezzoYahoo = YahooFinanceFetcher.getPrice(symbol)
                 if (prezzoYahoo != null) {
                     val now = formatter.format(Date())
                     val roundedPrice = (kotlin.math.round(prezzoYahoo * 100) / 100.0)
-
                     lastPricesMap[symbol] = roundedPrice
                     underlyingPriceDao.insertOrUpdate(UnderlyingPrice(symbol, roundedPrice, now))
                     _lastSyncTime.value = now
-
-                    // Aggiorna i certificati che hanno questo sottostante come "principale"
                     listaCertificati.filter { (it.und1 ?: it.underlyingName).trim() == symbol }.forEach { cert ->
                         dao.updateUnderlyingPrice(cert.isin, roundedPrice, now)
                     }
-
-                    // 🔹 LOG: Conferma successo per il ticker
                     logApi("✅ Yahoo Finance → $symbol: $roundedPrice")
                 } else {
                     hasError = true
-                    // 🔹 LOG: Segnala errore per il ticker
                     logApi("❌ Yahoo Finance → $symbol non trovato")
                 }
-
-                // Ritardo per evitare blocchi da Yahoo
                 kotlinx.coroutines.delay(1000)
             }
 
+            // 🏁 FINE CICLO: Imposta risultati finali
+            _isSyncing.value = false
             _lastOperationFailed.value = hasError
+            _syncSuccess.value = !hasError
             logApi(if (hasError) "⚠️ Fine: Sincronizzazione conclusa con alcuni errori" else "🏁 Fine: Mercati aggiornati con successo")
         }
     }
+
     fun updateAllCertificates() {
         viewModelScope.launch {
+            _isSyncing.value = true
+            _syncSuccess.value = false
             _lastOperationFailed.value = false
+
             logApi("🚀 Avvio aggiornamento globale portafoglio...")
 
             val lista = certificates.value
             if (lista.isEmpty()) {
-                logApi("⚠️ Nessun certificato in portafoglio da aggiornare.")
+                logApi("⚠️ Nessun certificato in portafoglio.")
+                _isSyncing.value = false
                 return@launch
             }
 
@@ -199,7 +203,6 @@ class CertificatesViewModel(
                 try {
                     logApi("🔍 Aggiornamento [${index + 1}/${lista.size}]: ${cert.isin}")
                     fetchAndUpdatePrice(cert.isin, useBorsaItaliana = true)
-                    // Aspettiamo un po' tra una chiamata e l'altra per non sovraccaricare
                     kotlinx.coroutines.delay(2500)
                 } catch (e: Exception) {
                     erroriRilevati = true
@@ -207,8 +210,10 @@ class CertificatesViewModel(
                 }
             }
 
+            _isSyncing.value = false
             _lastOperationFailed.value = erroriRilevati
-            logApi("🏁 Fine: Aggiornamento globale completato") // 👈 Questo è il messaggio che mancava
+            _syncSuccess.value = !erroriRilevati
+            logApi("🏁 Fine: Aggiornamento globale completato")
         }
     }
 
